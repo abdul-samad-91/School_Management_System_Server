@@ -52,6 +52,10 @@ mongoose.connect(process.env.MONGODB_URI)
     process.exit(1);
   });
 
+app.get('/' , (req , res)=>{
+  res.sendFile(path.join(__dirname , "public" , "index.html"))
+})
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/school', schoolRoutes);
