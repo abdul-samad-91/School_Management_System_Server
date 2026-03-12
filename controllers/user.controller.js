@@ -1,5 +1,7 @@
 import User from '../models/User.model.js';
 
+
+
 export const getUsers = async (req, res) => {
   try {
     const { role, isActive, search } = req.query;
@@ -34,6 +36,8 @@ export const getUsers = async (req, res) => {
     });
   }
 };
+
+
 
 export const getUser = async (req, res) => {
   try {
