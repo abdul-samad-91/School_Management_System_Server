@@ -18,7 +18,7 @@ import studentRoutes from './routes/student.routes.js';
 import teacherRoutes from './routes/teacher.routes.js';
 import attendanceRoutes from './routes/attendance.routes.js';
 import examRoutes from './routes/exam.routes.js';
-import feeRoutes from './routes/fee.routes.js';
+import feeRoutes from './routes/fee.routes.js'; 
 import communicationRoutes from './routes/communication.routes.js';
 import userRoutes from './routes/user.routes.js';
 import dashboardRoutes from './routes/dashboard.routes.js';
@@ -48,7 +48,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('✅ MongoDB Connected Successfully'))
   .catch((err) => {
-    console.error('❌ MongoDB Connection Error:', err.message);
+    console.error('❌ MongoDB Connection Error:', err.message, err);
     process.exit(1);
   });
 

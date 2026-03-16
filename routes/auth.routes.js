@@ -3,10 +3,11 @@ import {
   register, 
   login, 
   getMe, 
-  updatePassword, 
+  update, 
   logout 
 } from '../controllers/auth.controller.js';
 import { protect, authorize } from '../middleware/auth.js';
+import { upload } from '../utils/CloudnaryUpload.js';
 
 const router = express.Router();
 
@@ -15,8 +16,7 @@ router.post('/register'
 , register);
 router.post('/login', login);
 router.get('/me', protect, getMe);
-router.put('/update-password', protect, updatePassword);
+router.put('/me/update', protect, upload.single('photo'), update);
 router.post('/logout', protect, logout);
 
 export default router;
-
