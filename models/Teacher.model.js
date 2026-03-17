@@ -105,10 +105,6 @@ const teacherSchema = new mongoose.Schema({
       ref: 'Class'
     },
     sections: [String],
-    subjects: [{
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Subject'
-    }],
     session: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'AcademicSession'

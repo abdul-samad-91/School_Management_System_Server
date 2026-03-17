@@ -49,7 +49,7 @@ export const getUser = async (req, res) => {
     }
 
     res.status(200).json({
-      success: true,
+      // success: true,
       data: user
     });
   } catch (error) {
@@ -62,9 +62,8 @@ export const getUser = async (req, res) => {
 
 export const updateUser = async (req, res) => {
   try {
-    // Prevent updating password through this route
+  
     delete req.body.password;
-    delete req.body.role; // Role can only be updated by super admin
 
     const user = await User.findByIdAndUpdate(
       req.params.id,
