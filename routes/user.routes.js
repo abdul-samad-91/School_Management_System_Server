@@ -16,7 +16,7 @@ router.get('/:id', protect, authorize('super_admin'), getUser);
 router.put('/:id', protect, authorize('super_admin'), updateUser);
 router.put('/:id/permissions', protect, authorize('super_admin'), updateUserPermissions);
 router.put('/:id/toggle-status', protect, authorize('super_admin'), toggleUserStatus);
-router.delete('/:id', protect, authorize('super_admin'), deleteUser);
+router.delete('/:id', protect, authorize('super_admin'), deleteUser); 
 
 export default router;
-
+ 

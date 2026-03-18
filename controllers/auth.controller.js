@@ -1,9 +1,7 @@
 import User from '../models/User.model.js';
 import { generateToken } from '../utils/generateToken.js';
 
-// @desc    Register new user (Super Admin only)
-// @route   POST /api/auth/register
-// @access  Private (Super Admin)
+
 export const register = async (req, res) => {
   try {
     const { username, email, password, role, permissions, profile } = req.body;
@@ -48,13 +46,10 @@ export const register = async (req, res) => {
   }
 };
 
-// @desc    Login user
-// @route   POST /api/auth/login
-// @access  Public
+
 export const login = async (req, res) => {
   try {
     const { username, password } = req.body;
-    console.log(req.body);
 
     // Validate input
     if (!username || !password) {
@@ -74,7 +69,7 @@ export const login = async (req, res) => {
     }
 
     // Check if user is active
-    if (!user.isActive) {
+    if (!user.isActive) {  
       return res.status(403).json({
         success: false,
         message: 'Account is inactive. Please contact administrator.'
@@ -120,9 +115,6 @@ export const login = async (req, res) => {
   }
 };
 
-// @desc    Get current logged in user
-// @route   GET /api/auth/me
-// @access  Private
 export const getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -131,6 +123,7 @@ export const getMe = async (req, res) => {
       success: true,
       data: user
     });
+
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -139,33 +132,126 @@ export const getMe = async (req, res) => {
   }
 };
 
-// @desc    Update user password
-// @route   PUT /api/auth/update-password
-// @access  Private
-export const updatePassword = async (req, res) => {
+
+export const update = async (req, res) => {
   try {
-    const { currentPassword, newPassword } = req.body;
+    const {
+      username,
+      currentPassword,
+      newPassword,
+      profile
+    } = req.body;
 
-    const user = await User.findById(req.user._id).select('+password');
+    let parsedProfile = null;
+    if (profile) {
+      try {
+        parsedProfile = typeof profile === 'string' ? JSON.parse(profile) : profile;
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid profile JSON'
+        });
+      }
+    }
 
-    // Check current password
-    const isMatch = await user.comparePassword(currentPassword);
-    if (!isMatch) {
-      return res.status(401).json({
+    const profileUpdates = {};
+    const profileFields = ['firstName', 'lastName', 'phone', 'address', 'gender', 'dateOfBirth'];
+    profileFields.forEach((field) => {
+      const value = req.body[field] !== undefined ? req.body[field] : parsedProfile?.[field];
+      if (value !== undefined) {
+        profileUpdates[field] = value;
+      }
+    });
+
+    if (req.file && req.file.path) {
+      profileUpdates.photo = req.file.path;
+    }
+
+    const hasProfileUpdates = Object.keys(profileUpdates).length > 0;
+    const hasUsernameUpdate = username !== undefined;
+    const hasPasswordUpdate = newPassword !== undefined;
+
+    if (!hasProfileUpdates && !hasUsernameUpdate && !hasPasswordUpdate) {
+      return res.status(400).json({
         success: false,
-        message: 'Current password is incorrect'
+        message: 'No update fields provided'
       });
     }
 
-    user.password = newPassword;
+    const user = await User.findById(req.user._id).select('+password');
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    if (hasUsernameUpdate && username && username !== user.username) {
+      const existingUser = await User.findOne({
+        username: username.toLowerCase(),
+        _id: { $ne: user._id }
+      });
+      if (existingUser) {
+        return res.status(400).json({
+          success: false,
+          message: 'Username is already taken'
+        });
+      }
+      user.username = username;
+    }
+
+    if (hasPasswordUpdate) {
+      if (!currentPassword) {
+        return res.status(400).json({
+          success: false,
+          message: 'Current password is required to update password'
+        });
+      }
+
+      const isMatch = await user.comparePassword(currentPassword);
+      if (!isMatch) {
+        return res.status(401).json({
+          success: false,
+          message: 'Current password is incorrect'
+        });
+      }
+
+      user.password = newPassword;
+    }
+
+    if (profileUpdates.dateOfBirth) {
+      const dob = new Date(profileUpdates.dateOfBirth);
+      if (Number.isNaN(dob.getTime())) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid dateOfBirth'
+        });
+      }
+      profileUpdates.dateOfBirth = dob;
+    }
+
+    if (hasProfileUpdates) {
+      if (!user.profile) user.profile = {};
+      Object.entries(profileUpdates).forEach(([key, value]) => {
+        user.profile[key] = value;
+      });
+    }
+
     await user.save();
 
-    const token = generateToken(user._id);
+    const token = hasPasswordUpdate ? generateToken(user._id) : undefined;
 
     res.status(200).json({
       success: true,
-      message: 'Password updated successfully',
-      token
+      message: 'Profile updated successfully',
+      ...(token ? { token } : {}),
+      data: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        profile: user.profile
+      }
     });
   } catch (error) {
     res.status(500).json({
@@ -175,9 +261,6 @@ export const updatePassword = async (req, res) => {
   }
 };
 
-// @desc    Logout user
-// @route   POST /api/auth/logout
-// @access  Private
 export const logout = async (req, res) => {
   try {
     res.status(200).json({
@@ -191,4 +274,4 @@ export const logout = async (req, res) => {
     });
   }
 };
-
+  
