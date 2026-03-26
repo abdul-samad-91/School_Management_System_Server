@@ -9,12 +9,22 @@ import {
   assignClasses
 } from '../controllers/teacher.controller.js';
 import { protect, checkPermission } from '../middleware/auth.js';
+import { teacherUpload } from '../utils/TeacherUpload.js';
 
 const router = express.Router();
 
 router.get('/', protect, checkPermission('teachers', 'view'), getTeachers);
 router.get('/:id', protect, checkPermission('teachers', 'view'), getTeacher);
-router.post('/', protect, checkPermission('teachers', 'create'), createTeacher);
+router.post(
+  '/',
+  protect,
+  checkPermission('teachers', 'create'),
+  teacherUpload.fields([
+    { name: 'photo', maxCount: 1 },
+    { name: 'documents', maxCount: 10 }
+  ]),
+  createTeacher
+);
 router.put('/:id', protect, checkPermission('teachers', 'update'), updateTeacher);
 router.delete('/:id', protect, checkPermission('teachers', 'delete'), deleteTeacher);
 router.put('/:id/assign-subjects', protect, checkPermission('teachers', 'update'), assignSubjects);

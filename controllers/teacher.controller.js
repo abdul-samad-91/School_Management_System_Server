@@ -79,13 +79,97 @@ export const getTeacher = async (req, res) => {
 
 export const createTeacher = async (req, res) => {
   try {
-    // Generate employee ID if not provided
-    if (!req.body.employeeId) {
-      const year = new Date().getFullYear();
-      req.body.employeeId = generateEmployeeId(year);
+    if (!req.files || !req.files.photo || req.files.photo.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Profile photo is required'
+      });
     }
 
-    const teacher = await Teacher.create(req.body);
+    if (!req.files.documents || req.files.documents.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one document (degree/CV/etc) is required'
+      });
+    }
+
+    const parseJson = (value) => {
+      if (!value) return undefined;
+      if (typeof value === 'string') {
+        try {
+          return JSON.parse(value);
+        } catch {
+          return undefined;
+        }
+      }
+      return value;
+    };
+
+    const profile = parseJson(req.body.profile) || {};
+    const employment = parseJson(req.body.employment) || {};
+    const qualifications = parseJson(req.body.qualifications) || [];
+    const experience = parseJson(req.body.experience) || [];
+    const subjects = parseJson(req.body.subjects) || [];
+    const classes = parseJson(req.body.classes) || [];
+    const salary = parseJson(req.body.salary) || {};
+
+    // Support flat fields too
+    const fields = ['firstName', 'lastName', 'middleName', 'dateOfBirth', 'gender', 'bloodGroup', 'email', 'phone', 'alternatePhone'];
+    fields.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        profile[field] = req.body[field];
+      }
+    });
+
+    const employmentFields = ['designation', 'department', 'type', 'joiningDate', 'contractType', 'contractEndDate'];
+    employmentFields.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        employment[field] = req.body[field];
+      }
+    });
+
+    const requiredProfile = ['firstName', 'lastName', 'dateOfBirth', 'gender', 'email', 'phone'];
+    const missingProfileFields = requiredProfile.filter((key) => !profile[key]);
+    if (missingProfileFields.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Missing required profile fields: ${missingProfileFields.join(', ')}`
+      });
+    }
+
+    const requiredEmployment = ['designation', 'joiningDate'];
+    const missingEmployment = requiredEmployment.filter((key) => !employment[key]);
+    if (missingEmployment.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Missing required employment fields: ${missingEmployment.join(', ')}`
+      });
+    }
+
+    profile.photo = req.files.photo[0].path;
+
+    const documentEntries = req.files.documents.map((file) => ({
+      name: file.originalname,
+      type: file.mimetype,
+      url: file.path,
+      uploadDate: new Date()
+    }));
+
+    const teacherPayload = {
+      employeeId: req.body.employeeId || generateEmployeeId(new Date().getFullYear()),
+      profile,
+      employment,
+      qualifications,
+      experience,
+      subjects,
+      classes,
+      salary,
+      documents: documentEntries,
+      userId: req.body.userId || undefined,
+      status: req.body.status || 'active'
+    };
+
+    const teacher = await Teacher.create(teacherPayload);
 
     res.status(201).json({
       success: true,
@@ -93,6 +177,7 @@ export const createTeacher = async (req, res) => {
       data: teacher
     });
   } catch (error) {
+    console.error('createTeacher error', error);
     res.status(500).json({
       success: false,
       message: error.message
