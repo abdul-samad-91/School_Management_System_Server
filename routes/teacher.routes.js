@@ -9,7 +9,7 @@ import {
   assignClasses
 } from '../controllers/teacher.controller.js';
 import { protect, checkPermission } from '../middleware/auth.js';
-import { teacherUpload } from '../utils/TeacherUpload.js';
+import { teacherUpload } from '../utils/CloudnaryUpload.js';
 
 const router = express.Router();
 
