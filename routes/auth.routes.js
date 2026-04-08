@@ -12,7 +12,7 @@ import { upload } from '../utils/CloudnaryUpload.js';
 const router = express.Router();
 
 router.post('/register'
-  , protect, authorize('super_admin')
+  // , protect, authorize('super_admin')
 , register);
 router.post('/login', login);
 router.get('/me', protect, getMe);

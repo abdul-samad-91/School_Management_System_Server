@@ -16,7 +16,7 @@ export const register = async (req, res) => {
       });
     }
 
-    // Create user
+    // Create user333
     const user = await User.create({
       username,
       email,
@@ -53,6 +53,7 @@ export const login = async (req, res) => {
 
     // Validate input
     if (!email || !password) {
+      console.log(email, password);
       return res.status(400).json({
         success: false,
         message: 'Please provide email and password'

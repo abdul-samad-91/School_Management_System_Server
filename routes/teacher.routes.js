@@ -16,7 +16,7 @@ const router = express.Router();
 router.get('/', protect, checkPermission('teachers', 'view'), getTeachers);
 router.get('/:id', protect, checkPermission('teachers', 'view'), getTeacher);
 router.post(
-  '/',
+  '/create',
   protect,
   checkPermission('teachers', 'create'),
   teacherUpload.fields([
@@ -25,10 +25,18 @@ router.post(
   ]),
   createTeacher
 );
-router.put('/:id', protect, checkPermission('teachers', 'update'), updateTeacher);
+router.put(
+  '/:id',
+  protect,
+  checkPermission('teachers', 'update'),
+  teacherUpload.fields([  
+    { name: 'photo', maxCount: 1 },
+    { name: 'documents', maxCount: 10 }
+  ]),
+  updateTeacher
+);
 router.delete('/:id', protect, checkPermission('teachers', 'delete'), deleteTeacher);
 router.put('/:id/assign-subjects', protect, checkPermission('teachers', 'update'), assignSubjects);
 router.put('/:id/assign-classes', protect, checkPermission('teachers', 'update'), assignClasses);
 
 export default router;
-
