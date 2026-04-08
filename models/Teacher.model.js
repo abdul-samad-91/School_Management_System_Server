@@ -1,9 +1,9 @@
 import mongoose from 'mongoose';
+import { generateEmployeeId } from '../utils/generateNumber.js';
 
 const teacherSchema = new mongoose.Schema({
   employeeId: {
     type: String,
-    required: [true, 'Employee ID is required'],
     unique: true,
     uppercase: true
   },
@@ -133,10 +133,10 @@ const teacherSchema = new mongoose.Schema({
     }
   },
   documents: [{
-    name: String,
-    type: String,
-    publicId: String,
-    url: String,
+    name: { type: String },
+    type: { type: String },
+    publicId: { type: String },
+    url: { type: String },
     uploadDate: {
       type: Date,
       default: Date.now
@@ -158,6 +158,19 @@ const teacherSchema = new mongoose.Schema({
 // Virtual for full name
 teacherSchema.virtual('fullName').get(function() {
   return `${this.profile.firstName} ${this.profile.middleName || ''} ${this.profile.lastName}`.trim();
+});
+
+teacherSchema.pre('save', async function(next) {
+  try {
+    if (this.employeeId) {
+      return next();
+    }
+
+    this.employeeId = await generateEmployeeId();
+    next();
+  } catch (error) {
+    next(error);
+  }
 });
 
 teacherSchema.set('toJSON', { virtuals: true });

@@ -2,6 +2,8 @@
  * Generate unique numbers for admission, receipt, certificate, etc.
  */
 
+import Counter from '../models/Counter.model.js';
+
 export const generateAdmissionNumber = (year) => {
   const timestamp = Date.now().toString().slice(-6);
   return `ADM${year}${timestamp}`;
@@ -19,8 +21,13 @@ export const generateCertificateNumber = (type, year) => {
   return `CERT${typeCode}${year}${timestamp}`;
 };
 
-export const generateEmployeeId = (year) => {
-  const timestamp = Date.now().toString().slice(-5);
-  return `EMP${year}${timestamp}`;
-};
+export const generateEmployeeId = async (year = new Date().getFullYear()) => {
+  const counter = await Counter.findOneAndUpdate(
+    { name: `teacher_employeeId_${year}` },
+    { $inc: { seq: 1 } },
+    { new: true, upsert: true, setDefaultsOnInsert: true }
+  );
 
+  const sequence = String(counter.seq).padStart(5, '0');
+  return `EMP${year}${sequence}`;
+};

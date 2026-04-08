@@ -40,3 +40,4 @@ router.put('/:id/assign-subjects', protect, checkPermission('teachers', 'update'
 router.put('/:id/assign-classes', protect, checkPermission('teachers', 'update'), assignClasses);
 
 export default router;
+ 

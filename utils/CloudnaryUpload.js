@@ -34,11 +34,6 @@ const sanitizeCloudinarySegment = (value = '') =>
     .replace(/^-|-$/g, '')
     .slice(0, 80);
 
-const normalizeEmployeeId = (value) => {
-  const sanitized = sanitizeCloudinarySegment(value);
-  return sanitized ? sanitized.toUpperCase() : null;
-};
-
 const createTeacherUploadError = (message, statusCode) => {
   const error = new Error(message);
   error.statusCode = statusCode;
@@ -55,8 +50,6 @@ const resolveTeacherEmployeeId = async (req) => {
   }
 
   req.teacherUploadEmployeeIdPromise = (async () => {
-    const requestEmployeeId = normalizeEmployeeId(req.body?.employeeId);
-
     if (req.params?.id) {
       if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
         throw createTeacherUploadError('Teacher not found', 404);
@@ -67,9 +60,9 @@ const resolveTeacherEmployeeId = async (req) => {
         throw createTeacherUploadError('Teacher not found', 404);
       }
 
-      req.teacherUploadEmployeeId = requestEmployeeId || teacher.employeeId;
+      req.teacherUploadEmployeeId = teacher.employeeId || await generateEmployeeId();
     } else {
-      req.teacherUploadEmployeeId = requestEmployeeId || generateEmployeeId(new Date().getFullYear());
+      req.teacherUploadEmployeeId = await generateEmployeeId();
     }
 
     req.body = req.body || {};

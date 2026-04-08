@@ -1,5 +1,4 @@
 import Teacher from '../models/Teacher.model.js';
-import { generateEmployeeId } from '../utils/generateNumber.js';
 
 const isPlainObject = (value) =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -148,7 +147,6 @@ export const getTeacher = async (req, res) => {
 
 export const createTeacher = async (req, res) => {
   try {
-
     if (!req.files || !req.files.photo || req.files.photo.length === 0) {
       return res.status(400).json({
         success: false,
@@ -191,6 +189,21 @@ export const createTeacher = async (req, res) => {
       }
     });
 
+    if (profile.email !== undefined) {
+      profile.email = String(profile.email).trim().toLowerCase();
+    }
+
+    const emailExists = profile.email
+      ? await Teacher.findOne({ 'profile.email': profile.email })
+      : null;
+
+    if (emailExists) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email already exists'
+      });
+    }
+
     const employmentFields = ['designation', 'department', 'type', 'joiningDate', 'contractType', 'contractEndDate'];
     employmentFields.forEach((field) => {
       if (req.body[field] !== undefined) {
@@ -216,33 +229,39 @@ export const createTeacher = async (req, res) => {
       });
     }
 
-    profile.photo = req.files.photo[0].path;
+    const photoFile = req.files.photo[0];
+    profile.photo = photoFile.path || photoFile.secure_url || photoFile.url;
 
-    const employeeId = req.teacherUploadEmployeeId || req.body.employeeId || generateEmployeeId(new Date().getFullYear());
+    const employeeId = req.teacherUploadEmployeeId || undefined;
 
     const documentEntries = req.files.documents.map((file) => ({
       name: file.originalname,
       type: file.mimetype,
-      publicId: file.filename,
-      url: file.path,
+      publicId: file.filename || file.public_id,
+      url: file.path || file.secure_url || file.url,
       uploadDate: new Date()
     }));
+
+    const statusValue = typeof req.body.status === 'string' ? req.body.status.trim() : req.body.status;
+
+    // res.status(201).json(documentEntries)
 
     const teacherPayload = {
       employeeId,
       profile,
       employment,
-      qualifications,
+      qualifications, 
       experience,
       subjects,
       classes,
       salary,
       documents: documentEntries,
       userId: req.body.userId || undefined,
-      status: req.body.status || 'active'
+      status: statusValue || 'active'
     };
 
-    const teacher = await Teacher.create(teacherPayload);
+    const teacher = new Teacher(teacherPayload);
+    await teacher.save();
 
     res.status(201).json({
       success: true,
@@ -402,10 +421,8 @@ export const updateTeacher = async (req, res) => {
       updateData.classes = classesInput;
     }
 
-    const resolvedEmployeeId = req.teacherUploadEmployeeId || req.body.employeeId;
-
-    if (resolvedEmployeeId !== undefined) {
-      updateData.employeeId = resolvedEmployeeId;
+    if (!teacher.employeeId && req.teacherUploadEmployeeId) {
+      updateData.employeeId = req.teacherUploadEmployeeId;
     }
 
     if (req.body.userId !== undefined) {
@@ -413,7 +430,7 @@ export const updateTeacher = async (req, res) => {
     }
 
     if (req.body.status !== undefined) {
-      updateData.status = req.body.status;
+      updateData.status = typeof req.body.status === 'string' ? req.body.status.trim() : req.body.status;
     }
 
     const existingExperience = teacher.experience.map((entry) => normalizeExperienceEntry(toPlainObject(entry)));
