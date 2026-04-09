@@ -3,6 +3,27 @@ import Teacher from '../models/Teacher.model.js';
 const isPlainObject = (value) =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
+const isMissingRequiredValue = (value) => {
+  if (value === undefined || value === null) {
+    return true;
+  }
+
+  if (typeof value === 'string') {
+    return value.trim() === '';
+  }
+
+  return false;
+};
+
+const isValidDateInput = (value) => {
+  if (isMissingRequiredValue(value)) {
+    return false;
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+  return !Number.isNaN(date.getTime());
+};
+
 const parseJsonField = (value, fieldName) => {
   if (value === undefined || value === null || value === '') {
     return undefined;
@@ -212,7 +233,7 @@ export const createTeacher = async (req, res) => {
     });
 
     const requiredProfile = ['firstName', 'lastName', 'dateOfBirth', 'gender', 'email', 'phone'];
-    const missingProfileFields = requiredProfile.filter((key) => !profile[key]);
+    const missingProfileFields = requiredProfile.filter((key) => isMissingRequiredValue(profile[key]));
     if (missingProfileFields.length > 0) {
       return res.status(400).json({
         success: false,
@@ -221,11 +242,18 @@ export const createTeacher = async (req, res) => {
     }
 
     const requiredEmployment = ['designation', 'joiningDate'];
-    const missingEmployment = requiredEmployment.filter((key) => !employment[key]);
+    const missingEmployment = requiredEmployment.filter((key) => isMissingRequiredValue(employment[key]));
     if (missingEmployment.length > 0) {
       return res.status(400).json({
         success: false,
         message: `Missing required employment fields: ${missingEmployment.join(', ')}`
+      });
+    }
+
+    if (!isValidDateInput(employment.joiningDate)) {
+      return res.status(400).json({
+        success: false,
+        message: 'joiningDate must be a valid date'
       });
     }
 
@@ -282,7 +310,7 @@ export const updateTeacher = async (req, res) => {
     const teacher = await Teacher.findById(req.params.id);
     if (!teacher) {
       return res.status(404).json({
-        success: false,
+        success: false, 
         message: 'Teacher not found'
       });
     }
@@ -299,15 +327,15 @@ export const updateTeacher = async (req, res) => {
     if (profileInput !== undefined && !isPlainObject(profileInput)) {
       return res.status(400).json({
         success: false,
-        message: 'profile must be a valid object'
-      });
+        message: 'profile must be a valid object' 
+      });  
     }
 
     if (employmentInput !== undefined && !isPlainObject(employmentInput)) {
       return res.status(400).json({
-        success: false,
-        message: 'employment must be a valid object'
-      });
+        success: false, 
+        message: 'employment must be a valid object' 
+      });  
     }
 
     if (salaryInput !== undefined && !isPlainObject(salaryInput)) {
@@ -335,14 +363,14 @@ export const updateTeacher = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'classes must be an array'
-      });
+      }); 
     }
 
     if (experienceInput !== undefined && !Array.isArray(experienceInput)) {
-      return res.status(400).json({
-        success: false,
+      return res.status(400).json({ 
+        success: false, 
         message: 'experience must be an array'
-      });
+      }); 
     }
 
     if (newExperienceInput !== undefined && !Array.isArray(newExperienceInput)) {
@@ -352,10 +380,14 @@ export const updateTeacher = async (req, res) => {
       });
     }
 
-    if (
+    const hasJoiningDateUpdate =
       req.body.joiningDate !== undefined ||
-      (employmentInput && Object.prototype.hasOwnProperty.call(employmentInput, 'joiningDate'))
-    ) {
+      req.body['employment.joiningDate'] !== undefined ||
+      req.body['employment[joiningDate]'] !== undefined ||
+      (isPlainObject(req.body.employment) && req.body.employment.joiningDate !== undefined) ||
+      (employmentInput && Object.prototype.hasOwnProperty.call(employmentInput, 'joiningDate'));
+
+    if (hasJoiningDateUpdate) {
       return res.status(400).json({
         success: false,
         message: 'Joining date cannot be updated once the teacher is created'
@@ -537,6 +569,12 @@ export const deleteTeacher = async (req, res) => {
     });
   }
 };
+
+
+
+
+
+// will build after the class and subject apis
 
 export const assignSubjects = async (req, res) => {
   try {
