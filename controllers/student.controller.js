@@ -1,42 +1,442 @@
+import mongoose from 'mongoose';
 import Student from '../models/Student.model.js';
 import { generateAdmissionNumber } from '../utils/generateNumber.js';
 
-// @desc    Get all students
-// @route   GET /api/students
-// @access  Private
+const isPlainObject = (value) =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+const isMissingRequiredValue = (value) => {
+  if (value === undefined || value === null) {
+    return true;
+  }
+
+  if (typeof value === 'string') {
+    return value.trim() === '';
+  }
+
+  return false;
+};
+
+const isValidDateInput = (value) => {
+  if (isMissingRequiredValue(value)) {
+    return false;
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+  return !Number.isNaN(date.getTime());
+};
+
+const parseJsonField = (value, fieldName) => {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    const error = new Error(`Invalid ${fieldName} JSON`);
+    error.statusCode = 400;
+    throw error;
+  }
+};
+
+const mergeDefined = (target = {}, source = {}) => {
+  const merged = isPlainObject(target) ? { ...target } : {};
+
+  Object.entries(source).forEach(([key, value]) => {
+    if (value === undefined) {
+      return;
+    }
+
+    if (isPlainObject(value)) {
+      merged[key] = mergeDefined(merged[key], value);
+      return;
+    }
+
+    merged[key] = value;
+  });
+
+  return merged;
+};
+
+const toPlainObject = (value) => {
+  if (value && typeof value.toObject === 'function') {
+    return value.toObject();
+  }
+
+  return value;
+};
+
+const createValidationError = (message) => {
+  const error = new Error(message);
+  error.statusCode = 400;
+  return error;
+};
+
+const normalizeTrimmedString = (value) => {
+  if (value === undefined || value === null) {
+    return value;
+  }
+
+  return String(value).trim();
+};
+
+const normalizeUppercaseString = (value) => {
+  const normalizedValue = normalizeTrimmedString(value);
+
+  if (normalizedValue === undefined || normalizedValue === null) {
+    return normalizedValue;
+  }
+
+  return normalizedValue.toUpperCase();
+};
+
+const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
+const validateObjectId = (value, fieldName) => {
+  if (isMissingRequiredValue(value)) {
+    return;
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(value)) {
+    throw createValidationError(`${fieldName} must be a valid id`);
+  }
+};
+
+const normalizeProfilePayload = (profile = {}) => {
+  const normalizedProfile = { ...profile };
+
+  [
+    'firstName',
+    'lastName',
+    'middleName',
+    'gender',
+    'bloodGroup',
+    'email',
+    'phone'
+  ].forEach((field) => {
+    if (normalizedProfile[field] !== undefined) {
+      normalizedProfile[field] = normalizeTrimmedString(normalizedProfile[field]);
+    }
+  });
+
+  if (normalizedProfile.email !== undefined && normalizedProfile.email !== null) {
+    normalizedProfile.email = normalizedProfile.email.toLowerCase();
+  }
+
+  const requiredFields = ['firstName', 'lastName', 'dateOfBirth', 'gender'];
+  const missingFields = requiredFields.filter((field) =>
+    isMissingRequiredValue(normalizedProfile[field])
+  );
+
+  if (missingFields.length > 0) {
+    throw createValidationError(`Missing required profile fields: ${missingFields.join(', ')}`);
+  }
+
+  if (!isValidDateInput(normalizedProfile.dateOfBirth)) {
+    throw createValidationError('dateOfBirth must be a valid date');
+  }
+
+  if (
+    normalizedProfile.email !== undefined &&
+    normalizedProfile.email !== '' &&
+    !isValidEmail(normalizedProfile.email)
+  ) {
+    throw createValidationError('profile.email must be a valid email address');
+  }
+
+  return normalizedProfile;
+};
+
+const normalizeParentsPayload = (parents, { requireAtLeastOne = true } = {}) => {
+  if (!Array.isArray(parents)) {
+    throw createValidationError('parents must be an array');
+  }
+
+  if (requireAtLeastOne && parents.length === 0) {
+    throw createValidationError('At least one parent or guardian is required');
+  }
+
+  const normalizedParents = parents.map((parent, index) => {
+    if (!isPlainObject(parent)) {
+      throw createValidationError(`parents[${index}] must be a valid object`);
+    }
+
+    const normalizedParent = { ...parent };
+
+    [
+      'relationship',
+      'firstName',
+      'lastName',
+      'occupation',
+      'phone',
+      'whatsappNumber',
+      'email',
+      'address'
+    ].forEach((field) => {
+      if (normalizedParent[field] !== undefined) {
+        normalizedParent[field] = normalizeTrimmedString(normalizedParent[field]);
+      }
+    });
+
+    const missingFields = ['relationship', 'firstName', 'phone'].filter((field) =>
+      isMissingRequiredValue(normalizedParent[field])
+    );
+
+    if (missingFields.length > 0) {
+      throw createValidationError(
+        `Missing required parent fields in parents[${index}]: ${missingFields.join(', ')}`
+      );
+    }
+
+    if (
+      normalizedParent.email !== undefined &&
+      normalizedParent.email !== '' &&
+      !isValidEmail(normalizedParent.email)
+    ) {
+      throw createValidationError(`parents[${index}].email must be a valid email address`);
+    }
+
+    return normalizedParent;
+  });
+
+  const primaryContacts = normalizedParents.filter((parent) => parent.isPrimary === true);
+  if (primaryContacts.length > 1) {
+    throw createValidationError('Only one primary parent or guardian contact is allowed');
+  }
+
+  if (normalizedParents.length > 0 && primaryContacts.length === 0) {
+    normalizedParents[0].isPrimary = true;
+  }
+
+  return normalizedParents;
+};
+
+const normalizeEmergencyContactPayload = (emergencyContact = {}) => {
+  const normalizedEmergencyContact = { ...emergencyContact };
+
+  ['name', 'relationship', 'phone'].forEach((field) => {
+    if (normalizedEmergencyContact[field] !== undefined) {
+      normalizedEmergencyContact[field] = normalizeTrimmedString(
+        normalizedEmergencyContact[field]
+      );
+    }
+  });
+
+  return normalizedEmergencyContact;
+};
+
+const normalizeMedicalPayload = (medical = {}) => {
+  const normalizedMedical = { ...medical };
+
+  ['conditions', 'allergies', 'medications'].forEach((field) => {
+    if (normalizedMedical[field] !== undefined && !Array.isArray(normalizedMedical[field])) {
+      throw createValidationError(`medical.${field} must be an array`);
+    }
+  });
+
+  ['specialNeeds', 'bloodGroup'].forEach((field) => {
+    if (normalizedMedical[field] !== undefined) {
+      normalizedMedical[field] = normalizeTrimmedString(normalizedMedical[field]);
+    }
+  });
+
+  return normalizedMedical;
+};
+
+const normalizeAcademicPayload = (
+  academic = {},
+  { requireCoreFields = false, allowAdmissionDateUpdate = true } = {}
+) => {
+  const normalizedAcademic = { ...academic };
+
+  if (normalizedAcademic.currentClass !== undefined) {
+    validateObjectId(normalizedAcademic.currentClass, 'academic.currentClass');
+  }
+
+  if (normalizedAcademic.session !== undefined) {
+    validateObjectId(normalizedAcademic.session, 'academic.session');
+  }
+
+  if (normalizedAcademic.currentSection !== undefined) {
+    normalizedAcademic.currentSection = normalizeTrimmedString(normalizedAcademic.currentSection);
+  }
+
+  if (normalizedAcademic.admissionDate !== undefined) {
+    if (!allowAdmissionDateUpdate) {
+      throw createValidationError('Admission date cannot be updated once the student is created');
+    }
+
+    if (!isValidDateInput(normalizedAcademic.admissionDate)) {
+      throw createValidationError('academic.admissionDate must be a valid date');
+    }
+  }
+
+  if (
+    normalizedAcademic.previousSchool !== undefined &&
+    !isPlainObject(normalizedAcademic.previousSchool)
+  ) {
+    throw createValidationError('academic.previousSchool must be a valid object');
+  }
+
+  if (isPlainObject(normalizedAcademic.previousSchool)) {
+    normalizedAcademic.previousSchool = {
+      ...normalizedAcademic.previousSchool
+    };
+
+    ['name', 'board', 'lastClass'].forEach((field) => {
+      if (normalizedAcademic.previousSchool[field] !== undefined) {
+        normalizedAcademic.previousSchool[field] = normalizeTrimmedString(
+          normalizedAcademic.previousSchool[field]
+        );
+      }
+    });
+  }
+
+  if (requireCoreFields) {
+    const missingFields = ['currentClass', 'currentSection', 'session'].filter((field) =>
+      isMissingRequiredValue(normalizedAcademic[field])
+    );
+
+    if (missingFields.length > 0) {
+      throw createValidationError(`Missing required academic fields: ${missingFields.join(', ')}`);
+    }
+  }
+
+  return normalizedAcademic;
+};
+
+const buildStudentDocumentEntries = (files = []) =>
+  files.map((file) => ({
+    name: file.originalname,
+    type: file.mimetype,
+    publicId: file.filename || file.public_id,
+    url: file.path || file.secure_url || file.url,
+    uploadDate: new Date()
+  }));
+
+const extractProfilePayload = (req, profileInput = {}) => {
+  if (!isPlainObject(profileInput)) {
+    throw createValidationError('profile must be a valid object');
+  }
+
+  const profile = { ...profileInput };
+  const profileFields = [
+    'firstName',
+    'lastName',
+    'middleName',
+    'dateOfBirth',
+    'gender',
+    'bloodGroup',
+    'email',
+    'phone'
+  ];
+
+  profileFields.forEach((field) => {
+    if (req.body[field] !== undefined) {
+      profile[field] = req.body[field];
+    }
+  });
+
+  return profile;
+};
+
+const extractAcademicPayload = (req, academicInput = {}) => {
+  if (!isPlainObject(academicInput)) {
+    throw createValidationError('academic must be a valid object');
+  }
+
+  const academic = { ...academicInput };
+
+  if (req.body.currentClass !== undefined) {
+    academic.currentClass = req.body.currentClass;
+  }
+
+  if (req.body.currentSection !== undefined) {
+    academic.currentSection = req.body.currentSection;
+  }
+
+  if (req.body.section !== undefined) {
+    academic.currentSection = req.body.section;
+  }
+
+  if (req.body.session !== undefined) {
+    academic.session = req.body.session;
+  }
+
+  if (req.body.admissionDate !== undefined) {
+    academic.admissionDate = req.body.admissionDate;
+  }
+
+  return academic;
+};
+
+const ensureStudentIdentifierUniqueness = async ({
+  admissionNumber,
+  registrationNumber,
+  currentStudentId
+}) => {
+  if (admissionNumber) {
+    const admissionNumberExists = await Student.findOne({ admissionNumber }).select('_id');
+    if (
+      admissionNumberExists &&
+      admissionNumberExists._id.toString() !== String(currentStudentId || '')
+    ) {
+      throw createValidationError('Admission number already exists');
+    }
+  }
+
+  if (registrationNumber) {
+    const registrationNumberExists = await Student.findOne({ registrationNumber }).select('_id');
+    if (
+      registrationNumberExists &&
+      registrationNumberExists._id.toString() !== String(currentStudentId || '')
+    ) {
+      throw createValidationError('Registration number already exists');
+    }
+  }
+};
+
 export const getStudents = async (req, res) => {
   try {
-    const { 
-      status, 
-      class: classId, 
-      section, 
+    const {
+      status,
+      class: classId,
+      section,
       session,
       search,
       page = 1,
       limit = 10
     } = req.query;
 
+    const currentPage = Number(page) || 1;
+    const perPage = Number(limit) || 10;
     const query = {};
-    
+
     if (status) query.status = status;
     if (classId) query['academic.currentClass'] = classId;
     if (section) query['academic.currentSection'] = section;
     if (session) query['academic.session'] = session;
-    
+
     if (search) {
       query.$or = [
         { 'profile.firstName': { $regex: search, $options: 'i' } },
         { 'profile.lastName': { $regex: search, $options: 'i' } },
         { admissionNumber: { $regex: search, $options: 'i' } },
-        { rollNumber: { $regex: search, $options: 'i' } }
+        { rollNumber: { $regex: search, $options: 'i' } },
+        { registrationNumber: { $regex: search, $options: 'i' } }
       ];
     }
 
     const students = await Student.find(query)
       .populate('academic.currentClass', 'name level')
       .populate('academic.session', 'name')
-      .limit(limit * 1)
-      .skip((page - 1) * limit)
+      .limit(perPage)
+      .skip((currentPage - 1) * perPage)
       .sort({ createdAt: -1 });
 
     const count = await Student.countDocuments(query);
@@ -44,8 +444,8 @@ export const getStudents = async (req, res) => {
     res.status(200).json({
       success: true,
       count,
-      totalPages: Math.ceil(count / limit),
-      currentPage: page,
+      totalPages: Math.ceil(count / perPage),
+      currentPage,
       data: students
     });
   } catch (error) {
@@ -56,9 +456,6 @@ export const getStudents = async (req, res) => {
   }
 };
 
-// @desc    Get single student
-// @route   GET /api/students/:id
-// @access  Private
 export const getStudent = async (req, res) => {
   try {
     const student = await Student.findById(req.params.id)
@@ -84,18 +481,91 @@ export const getStudent = async (req, res) => {
   }
 };
 
-// @desc    Create new student
-// @route   POST /api/students
-// @access  Private
 export const createStudent = async (req, res) => {
   try {
-    // Generate admission number if not provided
-    if (!req.body.admissionNumber) {
-      const year = new Date().getFullYear();
-      req.body.admissionNumber = generateAdmissionNumber(year);
+    if (!req.files?.photo || req.files.photo.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Profile photo is required'
+      });
     }
 
-    const student = await Student.create(req.body);
+    if (!req.files?.documents || req.files.documents.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one student document is required'
+      });
+    }
+
+    let admissionNumber =
+      normalizeUppercaseString(req.body.admissionNumber) ||
+      req.studentUploadAdmissionNumber ||
+      generateAdmissionNumber(new Date().getFullYear());
+
+    const registrationNumber = normalizeUppercaseString(req.body.registrationNumber);
+    const rollNumber = normalizeTrimmedString(req.body.rollNumber);
+
+    const profile = extractProfilePayload(req, parseJsonField(req.body.profile, 'profile') || {});
+    const parentsInput = parseJsonField(req.body.parents, 'parents');
+    const emergencyContactInput = parseJsonField(
+      req.body.emergencyContact,
+      'emergencyContact'
+    );
+    const medicalInput = parseJsonField(req.body.medical, 'medical');
+    const academic = extractAcademicPayload(
+      req,
+      parseJsonField(req.body.academic, 'academic') || {}
+    );
+
+    if (parentsInput === undefined) {
+      throw createValidationError('parents is required');
+    }
+
+    if (emergencyContactInput !== undefined && !isPlainObject(emergencyContactInput)) {
+      throw createValidationError('emergencyContact must be a valid object');
+    }
+
+    if (medicalInput !== undefined && !isPlainObject(medicalInput)) {
+      throw createValidationError('medical must be a valid object');
+    }
+
+    const normalizedProfile = normalizeProfilePayload(profile);
+    const normalizedParents = normalizeParentsPayload(parentsInput);
+    const normalizedEmergencyContact =
+      emergencyContactInput !== undefined
+        ? normalizeEmergencyContactPayload(emergencyContactInput)
+        : undefined;
+    const normalizedMedical =
+      medicalInput !== undefined ? normalizeMedicalPayload(medicalInput) : undefined;
+    const normalizedAcademic = normalizeAcademicPayload(academic, {
+      requireCoreFields: true,
+      allowAdmissionDateUpdate: true
+    });
+
+    await ensureStudentIdentifierUniqueness({ admissionNumber, registrationNumber });
+
+    const photoFile = req.files.photo[0];
+    normalizedProfile.photo = photoFile.path || photoFile.secure_url || photoFile.url;
+
+    const statusValue = normalizeTrimmedString(req.body.status);
+    const admissionStatusValue = normalizeTrimmedString(req.body.admissionStatus);
+
+    const studentPayload = {
+      admissionNumber,
+      registrationNumber: registrationNumber || undefined,
+      rollNumber: rollNumber || undefined,
+      profile: normalizedProfile,
+      parents: normalizedParents,
+      emergencyContact: normalizedEmergencyContact,
+      medical: normalizedMedical,
+      academic: normalizedAcademic,
+      documents: buildStudentDocumentEntries(req.files.documents),
+      status: statusValue || undefined,
+      admissionStatus: admissionStatusValue || undefined
+    };
+
+    const student = new Student(studentPayload);
+    await student.save();
 
     res.status(201).json({
       success: true,
@@ -103,23 +573,16 @@ export const createStudent = async (req, res) => {
       data: student
     });
   } catch (error) {
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
       message: error.message
     });
   }
 };
 
-// @desc    Update student
-// @route   PUT /api/students/:id
-// @access  Private
 export const updateStudent = async (req, res) => {
   try {
-    const student = await Student.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    );
+    const student = await Student.findById(req.params.id);
 
     if (!student) {
       return res.status(404).json({
@@ -128,22 +591,217 @@ export const updateStudent = async (req, res) => {
       });
     }
 
+    const profileInput = parseJsonField(req.body.profile, 'profile');
+    const parentsInput = parseJsonField(req.body.parents, 'parents');
+    const emergencyContactInput = parseJsonField(req.body.emergencyContact, 'emergencyContact');
+    const medicalInput = parseJsonField(req.body.medical, 'medical');
+    const academicInput = parseJsonField(req.body.academic, 'academic');
+
+    if (profileInput !== undefined && !isPlainObject(profileInput)) {
+      return res.status(400).json({
+        success: false,
+        message: 'profile must be a valid object'
+      });
+    }
+
+    if (parentsInput !== undefined && !Array.isArray(parentsInput)) {
+      return res.status(400).json({
+        success: false,
+        message: 'parents must be an array'
+      });
+    }
+
+    if (emergencyContactInput !== undefined && !isPlainObject(emergencyContactInput)) {
+      return res.status(400).json({
+        success: false,
+        message: 'emergencyContact must be a valid object'
+      });
+    }
+
+    if (medicalInput !== undefined && !isPlainObject(medicalInput)) {
+      return res.status(400).json({
+        success: false,
+        message: 'medical must be a valid object'
+      });
+    }
+
+    if (academicInput !== undefined && !isPlainObject(academicInput)) {
+      return res.status(400).json({
+        success: false,
+        message: 'academic must be a valid object'
+      });
+    }
+
+    const requestedAdmissionNumber = normalizeUppercaseString(req.body.admissionNumber);
+    if (
+      requestedAdmissionNumber !== undefined &&
+      requestedAdmissionNumber !== '' &&
+      requestedAdmissionNumber !== student.admissionNumber
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'Admission number cannot be updated once the student is created'
+      });
+    }
+
+    const hasAdmissionDateUpdate =
+      req.body.admissionDate !== undefined ||
+      req.body['academic.admissionDate'] !== undefined ||
+      req.body['academic[admissionDate]'] !== undefined ||
+      (academicInput &&
+        Object.prototype.hasOwnProperty.call(academicInput, 'admissionDate'));
+
+    if (hasAdmissionDateUpdate) {
+      return res.status(400).json({
+        success: false,
+        message: 'Admission date cannot be updated once the student is created'
+      });
+    }
+
+    const updateData = {};
+    const pushData = {};
+
+    const profileUpdates = profileInput ? { ...profileInput } : {};
+    [
+      'firstName',
+      'lastName',
+      'middleName',
+      'dateOfBirth',
+      'gender',
+      'bloodGroup',
+      'email',
+      'phone'
+    ].forEach((field) => {
+      if (req.body[field] !== undefined) {
+        profileUpdates[field] = req.body[field];
+      }
+    });
+
+    if (req.files?.photo?.[0]) {
+      const photoFile = req.files.photo[0];
+      profileUpdates.photo = photoFile.path || photoFile.secure_url || photoFile.url;
+    }
+
+    if (Object.keys(profileUpdates).length > 0) {
+      updateData.profile = mergeDefined(
+        toPlainObject(student.profile),
+        normalizeProfilePayload(mergeDefined(toPlainObject(student.profile), profileUpdates))
+      );
+    }
+
+    if (parentsInput !== undefined) {
+      updateData.parents = normalizeParentsPayload(parentsInput);
+    }
+
+    if (emergencyContactInput !== undefined) {
+      updateData.emergencyContact = mergeDefined(
+        toPlainObject(student.emergencyContact),
+        normalizeEmergencyContactPayload(emergencyContactInput)
+      );
+    }
+
+    if (medicalInput !== undefined) {
+      updateData.medical = mergeDefined(
+        toPlainObject(student.medical),
+        normalizeMedicalPayload(medicalInput)
+      );
+    }
+
+    const academicUpdates = academicInput ? { ...academicInput } : {};
+    if (req.body.currentClass !== undefined) {
+      academicUpdates.currentClass = req.body.currentClass;
+    }
+
+    if (req.body.currentSection !== undefined) {
+      academicUpdates.currentSection = req.body.currentSection;
+    }
+
+    if (req.body.section !== undefined) {
+      academicUpdates.currentSection = req.body.section;
+    }
+
+    if (req.body.session !== undefined) {
+      academicUpdates.session = req.body.session;
+    }
+
+    if (Object.keys(academicUpdates).length > 0) {
+      updateData.academic = mergeDefined(
+        toPlainObject(student.academic),
+        normalizeAcademicPayload(academicUpdates, {
+          requireCoreFields: false,
+          allowAdmissionDateUpdate: false
+        })
+      );
+    }
+
+    const registrationNumber = normalizeUppercaseString(req.body.registrationNumber);
+    if (
+      registrationNumber !== undefined &&
+      registrationNumber !== '' &&
+      registrationNumber !== student.registrationNumber
+    ) {
+      await ensureStudentIdentifierUniqueness({
+        registrationNumber,
+        currentStudentId: student._id
+      });
+      updateData.registrationNumber = registrationNumber;
+    }
+
+    if (req.body.rollNumber !== undefined) {
+      updateData.rollNumber = normalizeTrimmedString(req.body.rollNumber);
+    }
+
+    if (req.body.status !== undefined) {
+      updateData.status = normalizeTrimmedString(req.body.status);
+    }
+
+    if (req.body.admissionStatus !== undefined) {
+      updateData.admissionStatus = normalizeTrimmedString(req.body.admissionStatus);
+    }
+
+    if (req.files?.documents?.length) {
+      pushData.documents = {
+        $each: buildStudentDocumentEntries(req.files.documents)
+      };
+    }
+
+    const updateOperation = {};
+
+    if (Object.keys(updateData).length > 0) {
+      updateOperation.$set = updateData;
+    }
+
+    if (Object.keys(pushData).length > 0) {
+      updateOperation.$push = pushData;
+    }
+
+    if (Object.keys(updateOperation).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No update fields provided'
+      });
+    }
+
+    const updatedStudent = await Student.findByIdAndUpdate(req.params.id, updateOperation, {
+      new: true,
+      runValidators: true
+    })
+      .populate('academic.currentClass', 'name level sections')
+      .populate('academic.session', 'name startDate endDate');
+
     res.status(200).json({
       success: true,
       message: 'Student updated successfully',
-      data: student
+      data: updatedStudent
     });
   } catch (error) {
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
       message: error.message
     });
   }
 };
 
-// @desc    Delete student
-// @route   DELETE /api/students/:id
-// @access  Private
 export const deleteStudent = async (req, res) => {
   try {
     const student = await Student.findByIdAndDelete(req.params.id);
@@ -167,9 +825,6 @@ export const deleteStudent = async (req, res) => {
   }
 };
 
-// @desc    Update student status
-// @route   PUT /api/students/:id/status
-// @access  Private
 export const updateStudentStatus = async (req, res) => {
   try {
     const { status, reason, remarks } = req.body;
@@ -205,9 +860,6 @@ export const updateStudentStatus = async (req, res) => {
   }
 };
 
-// @desc    Approve student admission
-// @route   PUT /api/students/:id/approve
-// @access  Private
 export const approveAdmission = async (req, res) => {
   try {
     const student = await Student.findById(req.params.id);
@@ -236,9 +888,6 @@ export const approveAdmission = async (req, res) => {
   }
 };
 
-// @desc    Promote students
-// @route   POST /api/students/promote
-// @access  Private
 export const promoteStudents = async (req, res) => {
   try {
     const { studentIds, toClass, toSection, toSession } = req.body;
@@ -265,4 +914,3 @@ export const promoteStudents = async (req, res) => {
     });
   }
 };
-

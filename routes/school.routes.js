@@ -246,6 +246,26 @@ const statusValidation = [
     .toBoolean()
 ];
 
+
+router.get(
+  '/',
+  protect,
+  checkPermission('school_setup', 'view'),
+  schoolQueryValidation,
+  validate,
+  getSchools
+);
+
+router.get(
+  '/:id',
+  protect,
+  checkPermission('school_setup', 'view'),
+  schoolIdValidation,
+  validate,
+  getSchool
+);
+
+
 router.get(
   '/profile',
   protect,
@@ -271,32 +291,7 @@ router.put(
   updateSchoolProfile
 );
 
-router.get(
-  '/',
-  protect,
-  checkPermission('school_setup', 'view'),
-  schoolQueryValidation,
-  validate,
-  getSchools
-);
 
-router.get(
-  '/:id',
-  protect,
-  checkPermission('school_setup', 'view'),
-  schoolIdValidation,
-  validate,
-  getSchool
-);
-
-router.put(
-  '/:id',
-  protect,
-  checkPermission('school_setup', 'update'),
-  [...schoolIdValidation, ...updateSchoolValidation],
-  validate,
-  updateSchoolProfile
-);
 
 router.patch(
   '/:id/status',

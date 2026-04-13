@@ -3,8 +3,9 @@ import { v2 as cloudinary } from 'cloudinary';
 import mongoose from 'mongoose';
 import multer from 'multer';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
+import Student from '../models/Student.model.js';
 import Teacher from '../models/Teacher.model.js';
-import { generateEmployeeId } from './generateNumber.js';
+import { generateAdmissionNumber, generateEmployeeId } from './generateNumber.js';
 import dotenv from 'dotenv';
 
 
@@ -35,6 +36,12 @@ const sanitizeCloudinarySegment = (value = '') =>
     .slice(0, 80);
 
 const createTeacherUploadError = (message, statusCode) => {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+};
+
+const createStudentUploadError = (message, statusCode) => {
   const error = new Error(message);
   error.statusCode = statusCode;
   return error;
@@ -81,6 +88,54 @@ const buildTeacherAssetPublicId = (employeeId, file) => {
   return `${employeeId}-${assetLabel}-${originalName}-${Date.now()}`;
 };
 
+const resolveStudentAdmissionNumber = async (req) => {
+  if (req.studentUploadAdmissionNumber) {
+    return req.studentUploadAdmissionNumber;
+  }
+
+  if (req.studentUploadAdmissionNumberPromise) {
+    return req.studentUploadAdmissionNumberPromise;
+  }
+
+  req.studentUploadAdmissionNumberPromise = (async () => {
+    if (req.params?.id) {
+      if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        throw createStudentUploadError('Student not found', 404);
+      }
+
+      const student = await Student.findById(req.params.id).select('admissionNumber');
+      if (!student) {
+        throw createStudentUploadError('Student not found', 404);
+      }
+
+      req.studentUploadAdmissionNumber =
+        student.admissionNumber || generateAdmissionNumber(new Date().getFullYear());
+    } else {
+      const providedAdmissionNumber =
+        typeof req.body?.admissionNumber === 'string'
+          ? req.body.admissionNumber.trim().toUpperCase()
+          : req.body?.admissionNumber;
+
+      req.studentUploadAdmissionNumber =
+        providedAdmissionNumber || generateAdmissionNumber(new Date().getFullYear());
+    }
+
+    req.body = req.body || {};
+    req.body.admissionNumber = req.studentUploadAdmissionNumber;
+
+    return req.studentUploadAdmissionNumber;
+  })();
+
+  return req.studentUploadAdmissionNumberPromise;
+};
+
+const buildStudentAssetPublicId = (admissionNumber, file) => {
+  const assetLabel = file.fieldname === 'photo' ? 'photo' : 'document';
+  const originalName = sanitizeCloudinarySegment(path.parse(file.originalname || file.fieldname || 'file').name) || assetLabel;
+
+  return `${admissionNumber}-${assetLabel}-${originalName}-${Date.now()}`;
+};
+
 const teacherStorage = new CloudinaryStorage({
   cloudinary,
   params: async (req, file) => {
@@ -88,6 +143,31 @@ const teacherStorage = new CloudinaryStorage({
     const baseFolder = `sms/teachers/${employeeId}`;
     const folder = file.fieldname === 'photo' ? `${baseFolder}/photo` : `${baseFolder}/documents`;
     const publicId = buildTeacherAssetPublicId(employeeId, file);
+
+    if (file.fieldname === 'photo') {
+      return {
+        folder,
+        public_id: publicId,
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+        transformation: [{ width: 512, height: 512, crop: 'limit' }]
+      };
+    }
+
+    return {
+      folder,
+      public_id: publicId,
+      resource_type: 'auto'
+    };
+  }
+});
+
+const studentStorage = new CloudinaryStorage({
+  cloudinary,
+  params: async (req, file) => {
+    const admissionNumber = await resolveStudentAdmissionNumber(req);
+    const baseFolder = `sms/students/${admissionNumber}`;
+    const folder = file.fieldname === 'photo' ? `${baseFolder}/photo` : `${baseFolder}/documents`;
+    const publicId = buildStudentAssetPublicId(admissionNumber, file);
 
     if (file.fieldname === 'photo') {
       return {
@@ -143,6 +223,26 @@ const teacherFileFilter = (req, file, cb) => {
   cb(new Error('Invalid upload field'), false);
 };
 
+const studentFileFilter = (req, file, cb) => {
+  if (file.fieldname === 'photo') {
+    if (file.mimetype && file.mimetype.startsWith('image/')) {
+      cb(null, true);
+      return;
+    }
+    return cb(new Error('Profile photo must be an image (jpg,jpeg,png,webp)'), false);
+  }
+
+  if (file.fieldname === 'documents') {
+    if (teacherDocumentTypes.includes(file.mimetype)) {
+      cb(null, true);
+      return;
+    }
+    return cb(new Error('Documents must be PDF/DOC/DOCX/image'), false);
+  }
+
+  cb(new Error('Invalid upload field'), false);
+};
+
 const upload = multer({
   storage: userStorage,
   fileFilter: imageFilter,
@@ -155,4 +255,10 @@ const teacherUpload = multer({
   limits: { fileSize: 15 * 1024 * 1024 }
 });
 
-export { cloudinary, upload, teacherUpload };
+const studentUpload = multer({
+  storage: studentStorage,
+  fileFilter: studentFileFilter,
+  limits: { fileSize: 15 * 1024 * 1024 }
+});
+
+export { cloudinary, upload, teacherUpload, studentUpload };

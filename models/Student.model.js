@@ -131,6 +131,7 @@ const studentSchema = new mongoose.Schema({
   documents: [{
     name: String,
     type: String,
+    publicId: String,
     url: String,
     uploadDate: {
       type: Date,
@@ -171,4 +172,3 @@ studentSchema.set('toObject', { virtuals: true });
 const Student = mongoose.model('Student', studentSchema);
 
 export default Student;
-

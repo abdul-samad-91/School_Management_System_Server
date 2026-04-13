@@ -25,7 +25,9 @@ const pickAllowedFields = (payload = {}) => {
 };
 
 const buildSchoolQuery = (queryParams = {}) => {
-  const { search, isActive, city, state, country, code, id } = queryParams;
+
+    
+  const { search, isActive, city, state, country, code} = queryParams;
   const query = {};
 
   if (isActive !== undefined) {
@@ -104,6 +106,8 @@ const handleSchoolError = (res, error) => {
 
 export const getSchools = async (req, res) => {
   try {
+
+    
     const schools = await School.find(buildSchoolQuery(req.query)).sort({
       isActive: -1,
       createdAt: -1
