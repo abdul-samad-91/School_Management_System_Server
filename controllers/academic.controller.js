@@ -4,6 +4,18 @@ import Subject from '../models/Subject.model.js';
 import GradingSystem from '../models/GradingSystem.model.js';
 import Timetable from '../models/Timetable.model.js';
 
+const getAcademicErrorStatus = (error) => {
+  if (error.statusCode) {
+    return error.statusCode;
+  }
+
+  if (error.name === 'ValidationError' || error.code === 11000) {
+    return 400;
+  }
+
+  return 500;
+};
+
 // ========== Academic Sessions ==========
 
 export const getSessions = async (req, res) => {
@@ -18,13 +30,14 @@ export const getSessions = async (req, res) => {
 export const createSession = async (req, res) => {
   try {
     const session = await AcademicSession.create(req.body);
-    res.status(201).json({ 
-      success: true, 
+
+    res.status(201).json({
+      success: true,
       message: 'Academic session created successfully',
-      data: session 
+      data: session
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(getAcademicErrorStatus(error)).json({ success: false, message: error.message });
   }
 };
 
@@ -46,7 +59,7 @@ export const updateSession = async (req, res) => {
       data: session 
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(getAcademicErrorStatus(error)).json({ success: false, message: error.message });
   }
 };
 
@@ -67,7 +80,7 @@ export const setActiveSession = async (req, res) => {
       data: session 
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(getAcademicErrorStatus(error)).json({ success: false, message: error.message });
   }
 };
 
@@ -277,4 +290,3 @@ export const updateTimetable = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
