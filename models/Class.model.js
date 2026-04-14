@@ -22,7 +22,8 @@ const classSchema = new mongoose.Schema({
     },
     classTeacher: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Teacher'
+      ref: 'Teacher',
+      required : true
     },
     room: String,
     isActive: {

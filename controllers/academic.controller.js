@@ -43,20 +43,25 @@ export const createSession = async (req, res) => {
 
 export const updateSession = async (req, res) => {
   try {
-    const session = await AcademicSession.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    );
+    // can't be update if its locked
+    const Session = await AcademicSession.findById(req.params.id);
+
     
-    if (!session) {
+    if (!Session) {
       return res.status(404).json({ success: false, message: 'Session not found' });
     }
+
+    if (Session.isLocked) {
+      return res.status(400).json({ success: false, message: 'Cannot update a locked session' });
+    }
+    
+    const UpdatedSession = Session.set(req.body);
+    await UpdatedSession.save();
     
     res.status(200).json({ 
       success: true, 
       message: 'Session updated successfully',
-      data: session 
+      data: UpdatedSession 
     });
   } catch (error) {
     res.status(getAcademicErrorStatus(error)).json({ success: false, message: error.message });
@@ -69,6 +74,10 @@ export const setActiveSession = async (req, res) => {
     
     if (!session) {
       return res.status(404).json({ success: false, message: 'Session not found' });
+    }
+
+    if (session.isLocked) {
+            return res.status(400).json({ success: false, message: 'Cannot update a locked session' });
     }
     
     session.isActive = true;
