@@ -24,13 +24,36 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['super_admin', 'admin'],
+    enum: [
+      'master_admin',
+      'super_admin',
+      'admin',
+      'teacher',
+      'fee_editor',
+      'exam_controller'
+    ],
     default: 'admin'
+  },
+  school: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'School'
   },
   permissions: [{
     module: {
       type: String,
-      enum: ['school_setup', 'students', 'teachers', 'academics', 'fees', 'communication', 'reports', 'users']
+      enum: [
+        'school_setup',
+        'students',
+        'teachers',
+        'academics',
+        'attendance',
+        'fees',
+        'exams',
+        'certificates',
+        'communication',
+        'reports',
+        'users'
+      ]
     },
     actions: [{
       type: String,
@@ -75,7 +98,7 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
 
 // Method to check permission
 userSchema.methods.hasPermission = function(module, action) {
-  if (this.role === 'super_admin') return true;
+  if (this.role === 'master_admin' || this.role === 'super_admin') return true;
   
   const modulePermission = this.permissions.find(p => p.module === module);
   return modulePermission && modulePermission.actions.includes(action);
@@ -84,4 +107,3 @@ userSchema.methods.hasPermission = function(module, action) {
 const User = mongoose.model('User', userSchema);
 
 export default User;
-

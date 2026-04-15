@@ -2,6 +2,10 @@ import mongoose from 'mongoose';
 import { generateEmployeeId } from '../utils/generateNumber.js';
 
 const teacherSchema = new mongoose.Schema({
+  school: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'School'
+  },
   employeeId: {
     type: String,
     unique: true,
@@ -105,6 +109,10 @@ const teacherSchema = new mongoose.Schema({
       ref: 'Class'
     },
     sections: [String],
+    subjects: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Subject'
+    }],
     session: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'AcademicSession'

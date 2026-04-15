@@ -51,6 +51,10 @@ export const protect = async (req, res, next) => {
 
 export const authorize = (...roles) => {
   return (req, res, next) => {
+    if (req.user.role === 'master_admin') {
+      return next();
+    }
+
     if (!roles.includes(req.user.role)) {
       return res.status(403).json({
         success: false,
@@ -63,7 +67,7 @@ export const authorize = (...roles) => {
 
 export const checkPermission = (module, action) => {
   return (req, res, next) => {
-    if (req.user.role === 'super_admin') {
+    if (req.user.role === 'master_admin' || req.user.role === 'super_admin') {
       return next();
     }
 
@@ -76,4 +80,3 @@ export const checkPermission = (module, action) => {
     next();
   };
 };
-

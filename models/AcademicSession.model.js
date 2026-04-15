@@ -8,10 +8,6 @@ const createAcademicSessionError = (message, statusCode = 400) => {
 
 const ensureValidSessionDateRange = (startDate, endDate) => {
   if (!startDate || !endDate) {
-    // this starting year and 8 months are greater or equal to the end date
-    if (startDate + 8 * 30 * 24 * 60 * 60 * 1000 >= endDate) {
-      throw createAcademicSessionError('End date must be 8 months after start date');
-    }
     return;
   }
 
@@ -30,9 +26,18 @@ const ensureValidSessionDateRange = (startDate, endDate) => {
   }
 };
 
-const deactivateOtherActiveSessions = async (model, sessionId) => {
+const deactivateOtherActiveSessions = async (model, sessionId, schoolId) => {
+  const query = {
+    _id: { $ne: sessionId },
+    isActive: true
+  };
+
+  if (schoolId) {
+    query.school = schoolId;
+  }
+
   await model.updateMany(
-    { _id: { $ne: sessionId }, isActive: true },
+    query,
     { $set: { isActive: false } }
   );
 };
@@ -52,6 +57,11 @@ const getNormalizedUpdatePayload = (update = {}) => {
 };
 
 const academicSessionSchema = new mongoose.Schema({
+  school: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'School',
+    required: [true, 'School is required']
+  },
   name: {
     type: String,
     required: [true, 'Session name is required'],
@@ -81,6 +91,8 @@ const academicSessionSchema = new mongoose.Schema({
   timestamps: true
 });
 
+academicSessionSchema.index({ school: 1, name: 1 }, { unique: true });
+
 academicSessionSchema.pre('validate', function(next) {
   try {
     ensureValidSessionDateRange(this.startDate, this.endDate);
@@ -94,7 +106,7 @@ academicSessionSchema.pre('validate', function(next) {
 academicSessionSchema.pre('save', async function(next) {
   try {
     if (this.isActive) {
-      await deactivateOtherActiveSessions(this.constructor, this._id);
+      await deactivateOtherActiveSessions(this.constructor, this._id, this.school);
     }
 
     next();
@@ -105,7 +117,9 @@ academicSessionSchema.pre('save', async function(next) {
 
 academicSessionSchema.pre('findOneAndUpdate', async function(next) {
   try {
-    const currentSession = await this.model.findOne(this.getQuery()).select('startDate endDate');
+    const currentSession = await this.model
+      .findOne(this.getQuery())
+      .select('startDate endDate school');
 
     if (!currentSession) {
       return next();
@@ -119,7 +133,11 @@ academicSessionSchema.pre('findOneAndUpdate', async function(next) {
     ensureValidSessionDateRange(startDate, endDate);
 
     if (updates.isActive === true) {
-      await deactivateOtherActiveSessions(this.model, currentSession._id);
+      await deactivateOtherActiveSessions(
+        this.model,
+        currentSession._id,
+        updates.school || currentSession.school
+      );
     }
 
     next();

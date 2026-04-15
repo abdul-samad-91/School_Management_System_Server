@@ -1,6 +1,10 @@
 import mongoose from 'mongoose';
 
 const studentSchema = new mongoose.Schema({
+  school: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'School'
+  },
   admissionNumber: {
     type: String,
     required: [true, 'Admission number is required'],

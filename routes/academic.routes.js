@@ -13,6 +13,7 @@ import {
   updateSubject,
   getGradingSystems,
   createGradingSystem,
+  updateGradingSystem,
   getTimetables,
   createTimetable,
   updateTimetable
@@ -41,6 +42,7 @@ router.put('/subjects/:id', protect, checkPermission('academics', 'update'), upd
 // Grading Systems
 router.get('/grading-systems', protect, checkPermission('academics', 'view'), getGradingSystems);
 router.post('/grading-systems', protect, checkPermission('academics', 'create'), createGradingSystem);
+router.put('/grading-systems/:id', protect, checkPermission('academics', 'update'), updateGradingSystem);
 
 // Timetables
 router.get('/timetables', protect, checkPermission('academics', 'view'), getTimetables);
@@ -48,4 +50,3 @@ router.post('/timetables', protect, checkPermission('academics', 'create'), crea
 router.put('/timetables/:id', protect, checkPermission('academics', 'update'), updateTimetable);
 
 export default router;
-
