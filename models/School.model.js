@@ -1,6 +1,24 @@
 import mongoose from 'mongoose';
 
 const schoolSchema = new mongoose.Schema({
+  masterAdmin: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  superAdmin: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  branchType: {
+    type: String,
+    enum: ['primary', 'model', 'high' , 'higher_secondary'],
+    default: 'campus'
+  },
+  parentBranch: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'School',
+    default: null
+  },
   name: {
     type: String,
     required: [true, 'School name is required'],
@@ -52,6 +70,11 @@ const schoolSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  operationalStatus: {
+    type: String,
+    enum: ['draft', 'active', 'inactive', 'suspended', 'closed'],
+    default: 'active'
   }
 }, {
   timestamps: true
@@ -60,4 +83,3 @@ const schoolSchema = new mongoose.Schema({
 const School = mongoose.model('School', schoolSchema);
 
 export default School;
-

@@ -1,6 +1,11 @@
 import mongoose from 'mongoose';
 
 const resultSchema = new mongoose.Schema({
+  school: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'School',
+    required: true
+  },
   student: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Student',
@@ -10,6 +15,10 @@ const resultSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Exam',
     required: true
+  },
+  subjectTeacher: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Teacher'
   },
   class: {
     type: mongoose.Schema.Types.ObjectId,
@@ -77,4 +86,3 @@ resultSchema.pre('save', function(next) {
 const Result = mongoose.model('Result', resultSchema);
 
 export default Result;
-

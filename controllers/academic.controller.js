@@ -246,6 +246,11 @@ const normalizeSectionPayload = (section = {}, index = 0) => {
     throw createAcademicError(`sections[${index}] must be a valid object`);
   }
 
+  const normalizedClassTeacher =
+    section.classTeacher !== undefined && section.classTeacher !== null && section.classTeacher !== ''
+      ? ensureObjectId(section.classTeacher, `sections[${index}].classTeacher`)
+      : undefined;
+
   const normalizedSection = {
     name: normalizeTrimmedString(section.name, `sections[${index}].name`, { required: true }),
     capacity:
@@ -254,10 +259,7 @@ const normalizeSectionPayload = (section = {}, index = 0) => {
       section.students,
       `sections[${index}].students`
     ),
-    classTeacher: normalizeObjectIdArray(
-      section.classTeacher,
-      `sections[${index}].classTeacher`
-    ),
+    classTeacher: normalizedClassTeacher,
     room: normalizeTrimmedString(section.room, `sections[${index}].room`),
     isActive:
       normalizeBoolean(section.isActive) !== undefined
@@ -292,7 +294,11 @@ const normalizeSectionsPayload = (sections) => {
 };
 
 const collectTeacherIdsFromSections = (sections = []) => {
-  return [...new Set(sections.flatMap((section) => section.classTeacher || []))];
+  return [
+    ...new Set(
+      sections.map((section) => section.classTeacher).filter(Boolean)
+    )
+  ];
 };
 
 const collectStudentIdsFromSections = (sections = []) => {
@@ -329,15 +335,17 @@ const getSectionAssignmentsByTeacher = (sections = []) => {
   const assignments = new Map();
 
   sections.forEach((section) => {
-    (section.classTeacher || []).forEach((teacherId) => {
-      const normalizedTeacherId = toIdString(teacherId);
+    if (!section.classTeacher) {
+      return;
+    }
 
-      if (!assignments.has(normalizedTeacherId)) {
-        assignments.set(normalizedTeacherId, new Set());
-      }
+    const normalizedTeacherId = toIdString(section.classTeacher);
 
-      assignments.get(normalizedTeacherId).add(section.name);
-    });
+    if (!assignments.has(normalizedTeacherId)) {
+      assignments.set(normalizedTeacherId, new Set());
+    }
+
+    assignments.get(normalizedTeacherId).add(section.name);
   });
 
   return assignments;
@@ -706,6 +714,22 @@ const populateSubjectById = (subjectId) =>
     .populate('session', 'name startDate endDate')
     .populate('classes.classId', 'name level')
     .populate('classes.teacher', 'employeeId profile.firstName profile.lastName');
+
+const ensureTimetableBelongsToScope = async (timetableId, schoolId) => {
+  const query = { _id: ensureObjectId(timetableId, 'timetableId') };
+
+  if (schoolId) {
+    query.school = schoolId;
+  }
+
+  const timetable = await Timetable.findOne(query);
+
+  if (!timetable) {
+    throw createAcademicError('Timetable not found', 404);
+  }
+
+  return timetable;
+};
 
 const populateGradingSystemById = (gradingSystemId) =>
   GradingSystem.findById(gradingSystemId)
@@ -1376,6 +1400,18 @@ export const getTimetables = async (req, res) => {
       .sort({ isActive: -1, version: -1, effectiveFrom: -1 });
 
     res.status(200).json({ success: true, data: timetables });
+  } catch (error) {
+    handleAcademicError(res, error);
+  }
+};
+
+export const getTimetable = async (req, res) => {
+  try {
+    const schoolId = resolveScopedSchoolId(req, req.query.school);
+    const timetable = await ensureTimetableBelongsToScope(req.params.id, schoolId);
+    const populatedTimetable = await populateTimetableById(timetable._id);
+
+    res.status(200).json({ success: true, data: populatedTimetable });
   } catch (error) {
     handleAcademicError(res, error);
   }

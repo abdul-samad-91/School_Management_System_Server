@@ -15,6 +15,7 @@ import {
   createGradingSystem,
   updateGradingSystem,
   getTimetables,
+  getTimetable,
   createTimetable,
   updateTimetable
 } from '../controllers/academic.controller.js';
@@ -46,6 +47,7 @@ router.put('/grading-systems/:id', protect, checkPermission('academics', 'update
 
 // Timetables
 router.get('/timetables', protect, checkPermission('academics', 'view'), getTimetables);
+router.get('/timetables/:id', protect, checkPermission('academics', 'view'), getTimetable);
 router.post('/timetables', protect, checkPermission('academics', 'create'), createTimetable);
 router.put('/timetables/:id', protect, checkPermission('academics', 'update'), updateTimetable);
 

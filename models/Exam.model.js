@@ -1,6 +1,11 @@
 import mongoose from 'mongoose';
 
 const examSchema = new mongoose.Schema({
+  school: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'School',
+    required: true
+  },
   name: {
     type: String,
     required: [true, 'Exam name is required'],
@@ -80,4 +85,3 @@ const examSchema = new mongoose.Schema({
 const Exam = mongoose.model('Exam', examSchema);
 
 export default Exam;
-

@@ -53,11 +53,10 @@ const classSchema = new mongoose.Schema({
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Student'
     }],
-    classTeacher: [{
+    classTeacher: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Teacher',
-      required : true
-    }],
+      ref: 'Teacher'
+    },
     Timetable: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Timetable'

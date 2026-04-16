@@ -1,6 +1,11 @@
 import mongoose from 'mongoose';
 
 const feeStructureSchema = new mongoose.Schema({
+  school: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'School',
+    required: true
+  },
   name: {
     type: String,
     required: [true, 'Fee structure name is required'],
@@ -80,4 +85,3 @@ feeStructureSchema.pre('save', function(next) {
 const FeeStructure = mongoose.model('FeeStructure', feeStructureSchema);
 
 export default FeeStructure;
-

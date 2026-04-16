@@ -1,3 +1,4 @@
+import { model } from 'mongoose';
 import School from '../models/School.model.js';
 
 const allowedSchoolFields = [

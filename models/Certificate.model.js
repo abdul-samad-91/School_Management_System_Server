@@ -1,6 +1,11 @@
 import mongoose from 'mongoose';
 
 const certificateSchema = new mongoose.Schema({
+  school: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'School',
+    required: true
+  },
   certificateNumber: {
     type: String,
     required: true,
@@ -63,4 +68,3 @@ const certificateSchema = new mongoose.Schema({
 const Certificate = mongoose.model('Certificate', certificateSchema);
 
 export default Certificate;
-

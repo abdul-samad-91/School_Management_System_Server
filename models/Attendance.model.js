@@ -1,6 +1,11 @@
 import mongoose from 'mongoose';
 
 const attendanceSchema = new mongoose.Schema({
+  school: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'School',
+    required: true
+  },
   student: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Student',
@@ -13,6 +18,16 @@ const attendanceSchema = new mongoose.Schema({
   },
   section: {
     type: String,
+    required: true
+  },
+  subject: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Subject',
+    required: true
+  },
+  teacher: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Teacher',
     required: true
   },
   date: {
@@ -52,10 +67,12 @@ const attendanceSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Compound index to ensure unique attendance per student per day
-attendanceSchema.index({ student: 1, date: 1 }, { unique: true });
+// Compound index to ensure unique attendance per student per subject per day
+attendanceSchema.index(
+  { school: 1, student: 1, subject: 1, date: 1 },
+  { unique: true }
+);
 
 const Attendance = mongoose.model('Attendance', attendanceSchema);
 
 export default Attendance;
-
