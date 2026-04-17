@@ -80,3 +80,24 @@ export const checkPermission = (module, action) => {
     next();
   };
 };
+
+export const checkPermissionOrRole = (module, action, ...roles) => {
+  return (req, res, next) => {
+    if (req.user.role === 'master_admin' || req.user.role === 'super_admin') {
+      return next();
+    }
+
+    if (roles.includes(req.user.role)) {
+      return next();
+    }
+
+    if (!req.user.hasPermission(module, action)) {
+      return res.status(403).json({
+        success: false,
+        message: `You do not have permission to ${action} ${module}`
+      });
+    }
+
+    next();
+  };
+};

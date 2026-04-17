@@ -24,7 +24,7 @@ const pickAllowedFields = (payload = {}) => {
     return accumulator;
   }, {});
 };
-
+ 
 const buildSchoolQuery = (queryParams = {}) => {
 
     
