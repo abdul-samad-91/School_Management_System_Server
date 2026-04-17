@@ -1,5 +1,15 @@
 import mongoose from 'mongoose';
 
+const documentSchema = new mongoose.Schema({
+  name: String,
+  type: String,
+  url: String,
+  uploadDate: {
+    type: Date,
+    default: Date.now
+  }
+}, { _id: false });
+
 const teacherSchema = new mongoose.Schema({
   employeeId: {
     type: String,
@@ -99,6 +109,10 @@ const teacherSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Subject'
   }],
+  subjectName: {
+    type: String,
+    default: ''
+  },
   classes: [{
     classId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -110,6 +124,10 @@ const teacherSchema = new mongoose.Schema({
       ref: 'AcademicSession'
     }
   }],
+  classLabel: {
+    type: String,
+    default: ''
+  },
   salary: {
     basic: Number,
     allowances: [{
@@ -132,15 +150,10 @@ const teacherSchema = new mongoose.Schema({
       branch: String
     }
   },
-  documents: [{
-    name: String,
-    type: String,
-    url: String,
-    uploadDate: {
-      type: Date,
-      default: Date.now
-    }
-  }],
+  documents: {
+    type: [documentSchema],
+    default: []
+  },
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'

@@ -54,7 +54,6 @@ export const getTeacher = async (req, res) => {
     const teacher = await Teacher.findById(req.params.id)
       .populate('subjects', 'name code type')
       .populate('classes.classId', 'name level sections')
-      .populate('classes.subjects', 'name code')
       .populate('classes.session', 'name')
       .populate('userId', 'username email role');
 
@@ -163,6 +162,8 @@ export const createTeacher = async (req, res) => {
       experience,
       subjects,
       classes,
+      subjectName: req.body.subjectName || undefined,
+      classLabel: req.body.classLabel || undefined,
       salary,
       documents: documentEntries,
       userId: req.body.userId || undefined,
