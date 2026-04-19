@@ -15,3 +15,4 @@ router.put('/:id', protect, checkPermission('academics', 'update'), updateAttend
 router.get('/report', protect, checkPermission('academics', 'view'), getAttendanceReport);
 
 export default router;
+

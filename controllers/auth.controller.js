@@ -16,7 +16,7 @@ export const register = async (req, res) => {
       });
     }
 
-    // Create user333
+    // Create user
     const user = await User.create({
       username,
       email,
