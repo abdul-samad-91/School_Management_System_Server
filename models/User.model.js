@@ -1,6 +1,36 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
+const normalizePermissions = (permissions = []) => {
+  if (!Array.isArray(permissions)) {
+    return permissions;
+  }
+
+  const permissionMap = new Map();
+
+  permissions.forEach((permission) => {
+    if (!permission?.module) {
+      return;
+    }
+
+    const moduleName = String(permission.module).trim();
+    const actions = Array.isArray(permission.actions)
+      ? [...new Set(permission.actions.map((action) => String(action).trim()).filter(Boolean))]
+      : [];
+
+    if (!permissionMap.has(moduleName)) {
+      permissionMap.set(moduleName, new Set());
+    }
+
+    actions.forEach((action) => permissionMap.get(moduleName).add(action));
+  });
+
+  return [...permissionMap.entries()].map(([module, actions]) => ({
+    module,
+    actions: [...actions]
+  }));
+};
+
 const userSchema = new mongoose.Schema({
   username: {
     type: String,
@@ -82,6 +112,20 @@ const userSchema = new mongoose.Schema({
   }
 }, {
   timestamps: true
+});
+
+userSchema.index({ school: 1, role: 1, isActive: 1 });
+
+userSchema.pre('validate', function(next) {
+  try {
+    if (Array.isArray(this.permissions)) {
+      this.permissions = normalizePermissions(this.permissions);
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
 });
 
 // Hash password before saving
