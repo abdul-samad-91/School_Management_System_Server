@@ -30,7 +30,9 @@ const userSchema = new mongoose.Schema({
       'admin',
       'teacher',
       'fee_editor',
-      'exam_controller'
+      'exam_controller',
+      'exam_officer',
+      'exam_leader'
     ],
     default: 'admin'
   },
