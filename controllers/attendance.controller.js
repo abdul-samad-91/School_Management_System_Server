@@ -241,6 +241,8 @@ const findSubjectAssignment = (subject, classId, section) =>
     return matchesClass && matchesSection;
   });
 
+  // attendance functions
+
 export const markAttendance = async (req, res) => {
   try {
     const sessionId = ensureObjectId(req.body.session, 'session');
