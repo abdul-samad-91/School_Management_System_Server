@@ -90,6 +90,10 @@ const normalizeExperienceEntry = (entry = {}) => ({
   responsibilities: entry.responsibilities ? String(entry.responsibilities).trim() : ''
 });
 
+
+
+//controller functions for teacher routes
+
 export const getTeachers = async (req, res) => {
   try {
     const { 
