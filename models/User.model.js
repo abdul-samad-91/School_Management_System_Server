@@ -1,6 +1,36 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
+const normalizePermissions = (permissions = []) => {
+  if (!Array.isArray(permissions)) {
+    return permissions;
+  }
+
+  const permissionMap = new Map();
+
+  permissions.forEach((permission) => {
+    if (!permission?.module) {
+      return;
+    }
+
+    const moduleName = String(permission.module).trim();
+    const actions = Array.isArray(permission.actions)
+      ? [...new Set(permission.actions.map((action) => String(action).trim()).filter(Boolean))]
+      : [];
+
+    if (!permissionMap.has(moduleName)) {
+      permissionMap.set(moduleName, new Set());
+    }
+
+    actions.forEach((action) => permissionMap.get(moduleName).add(action));
+  });
+
+  return [...permissionMap.entries()].map(([module, actions]) => ({
+    module,
+    actions: [...actions]
+  }));
+};
+
 const userSchema = new mongoose.Schema({
   username: {
     type: String,
@@ -24,13 +54,38 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['super_admin', 'admin'],
+    enum: [
+      'master_admin',
+      'super_admin',
+      'admin',
+      'teacher',
+      'fee_editor',
+      'exam_controller',
+      'exam_officer',
+      'exam_leader'
+    ],
     default: 'admin'
+  },
+  school: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'School'
   },
   permissions: [{
     module: {
       type: String,
-      enum: ['school_setup', 'students', 'teachers', 'academics', 'fees', 'communication', 'reports', 'users']
+      enum: [
+        'school_setup',
+        'students',
+        'teachers',
+        'academics',
+        'attendance',
+        'fees',
+        'exams',
+        'certificates',
+        'communication',
+        'reports',
+        'users'
+      ]
     },
     actions: [{
       type: String,
@@ -59,6 +114,20 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
+userSchema.index({ school: 1, role: 1, isActive: 1 });
+
+userSchema.pre('validate', function(next) {
+  try {
+    if (Array.isArray(this.permissions)) {
+      this.permissions = normalizePermissions(this.permissions);
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Hash password before saving
 userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
@@ -75,7 +144,7 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
 
 // Method to check permission
 userSchema.methods.hasPermission = function(module, action) {
-  if (this.role === 'super_admin') return true;
+  if (this.role === 'master_admin' || this.role === 'super_admin') return true;
   
   const modulePermission = this.permissions.find(p => p.module === module);
   return modulePermission && modulePermission.actions.includes(action);
@@ -84,4 +153,3 @@ userSchema.methods.hasPermission = function(module, action) {
 const User = mongoose.model('User', userSchema);
 
 export default User;
-

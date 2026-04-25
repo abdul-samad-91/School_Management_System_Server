@@ -1,6 +1,11 @@
 import mongoose from 'mongoose';
 
 const resultSchema = new mongoose.Schema({
+  school: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'School',
+    required: true
+  },
   student: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Student',
@@ -10,6 +15,10 @@ const resultSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Exam',
     required: true
+  },
+  subjectTeacher: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Teacher'
   },
   class: {
     type: mongoose.Schema.Types.ObjectId,
@@ -64,12 +73,18 @@ const resultSchema = new mongoose.Schema({
   timestamps: true
 });
 
+resultSchema.index(
+  { school: 1, exam: 1, student: 1, class: 1, section: 1 },
+  { unique: true }
+);
+
 // Calculate totals before saving
 resultSchema.pre('save', function(next) {
   if (this.subjects && this.subjects.length > 0) {
     this.totalMarks = this.subjects.reduce((sum, sub) => sum + sub.marksObtained, 0);
     this.totalMaxMarks = this.subjects.reduce((sum, sub) => sum + sub.maxMarks, 0);
-    this.percentage = (this.totalMarks / this.totalMaxMarks) * 100;
+    this.percentage =
+      this.totalMaxMarks > 0 ? (this.totalMarks / this.totalMaxMarks) * 100 : 0;
   }
   next();
 });
@@ -77,4 +92,3 @@ resultSchema.pre('save', function(next) {
 const Result = mongoose.model('Result', resultSchema);
 
 export default Result;
-

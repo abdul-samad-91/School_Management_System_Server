@@ -1,10 +1,43 @@
 import mongoose from 'mongoose';
 
+const createSubjectValidationError = (message) => {
+  const error = new Error(message);
+  error.statusCode = 400;
+  return error;
+};
+
+const validateClassMappings = (classes = []) => {
+  const assignmentKeys = new Set();
+
+  for (const classConfig of classes) {
+    if (
+      classConfig?.maxMarks !== undefined &&
+      classConfig?.passingMarks !== undefined &&
+      classConfig.passingMarks > classConfig.maxMarks
+    ) {
+      return false;
+    }
+
+    const classId = classConfig?.classId ? String(classConfig.classId) : '';
+    const sections = Array.isArray(classConfig?.sections)
+      ? [...classConfig.sections].sort().join('|')
+      : '';
+    const assignmentKey = `${classId}:${sections}`;
+
+    if (assignmentKeys.has(assignmentKey)) {
+      return false;
+    }
+
+    assignmentKeys.add(assignmentKey);
+  }
+
+  return true;
+};
+
 const subjectSchema = new mongoose.Schema({
   code: {
     type: String,
     required: [true, 'Subject code is required'],
-    unique: true,
     uppercase: true,
     trim: true
   },
@@ -43,6 +76,11 @@ const subjectSchema = new mongoose.Schema({
       default: 40
     }
   }],
+  school: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'School',
+    required: [true, 'School is required']
+  },
   session: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'AcademicSession',
@@ -56,7 +94,20 @@ const subjectSchema = new mongoose.Schema({
   timestamps: true
 });
 
+subjectSchema.pre('validate', function(next) {
+  if (!validateClassMappings(this.classes)) {
+    return next(
+      createSubjectValidationError(
+        'Each class-section subject mapping must be unique and passing marks cannot exceed max marks'
+      )
+    );
+  }
+
+  return next();
+});
+
+subjectSchema.index({ school: 1, session: 1, code: 1 }, { unique: true });
+
 const Subject = mongoose.model('Subject', subjectSchema);
 
 export default Subject;
-

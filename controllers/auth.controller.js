@@ -4,7 +4,7 @@ import { generateToken } from '../utils/generateToken.js';
 
 export const register = async (req, res) => {
   try {
-    const { username, email, password, role, permissions, profile } = req.body;
+    const { username, email, password, role, permissions, profile, school } = req.body;
     console.log(req.body);
 
     // Check if user already exists
@@ -22,6 +22,7 @@ export const register = async (req, res) => {
       email,
       password,
       role: role || 'admin',
+      school,
       permissions: permissions || [],
       profile,
       createdBy: req.user._id
@@ -35,6 +36,7 @@ export const register = async (req, res) => {
         username: user.username,
         email: user.email,
         role: user.role,
+        school: user.school,
         profile: user.profile
       }
     });
@@ -53,6 +55,7 @@ export const login = async (req, res) => {
 
     // Validate input
     if (!email || !password) {
+      console.log(email, password);
       return res.status(400).json({
         success: false,
         message: 'Please provide email and password'
@@ -101,6 +104,7 @@ export const login = async (req, res) => {
         username: user.username,
         email: user.email,
         role: user.role,
+        school: user.school,
         permissions: user.permissions,
         profile: user.profile
       }
@@ -250,6 +254,7 @@ export const update = async (req, res) => {
         username: user.username,
         email: user.email,
         role: user.role,
+        school: user.school,
         profile: user.profile
       }
     });

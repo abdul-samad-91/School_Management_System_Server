@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { generateEmployeeId } from '../utils/generateNumber.js';
 
 const documentSchema = new mongoose.Schema({
   name: String,
@@ -11,9 +12,12 @@ const documentSchema = new mongoose.Schema({
 }, { _id: false });
 
 const teacherSchema = new mongoose.Schema({
+  school: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'School'
+  },
   employeeId: {
     type: String,
-    required: [true, 'Employee ID is required'],
     unique: true,
     uppercase: true
   },
@@ -119,6 +123,10 @@ const teacherSchema = new mongoose.Schema({
       ref: 'Class'
     },
     sections: [String],
+    subjects: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Subject'
+    }],
     session: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'AcademicSession'
@@ -150,10 +158,16 @@ const teacherSchema = new mongoose.Schema({
       branch: String
     }
   },
-  documents: {
-    type: [documentSchema],
-    default: []
-  },
+  documents: [{
+    name: { type: String },
+    type: { type: String },
+    publicId: { type: String },
+    url: { type: String },
+    uploadDate: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
@@ -172,10 +186,22 @@ teacherSchema.virtual('fullName').get(function() {
   return `${this.profile.firstName} ${this.profile.middleName || ''} ${this.profile.lastName}`.trim();
 });
 
+teacherSchema.pre('save', async function(next) {
+  try {
+    if (this.employeeId) {
+      return next();
+    }
+
+    this.employeeId = await generateEmployeeId();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
 teacherSchema.set('toJSON', { virtuals: true });
 teacherSchema.set('toObject', { virtuals: true });
 
 const Teacher = mongoose.model('Teacher', teacherSchema);
 
 export default Teacher;
-
