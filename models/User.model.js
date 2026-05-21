@@ -55,14 +55,9 @@ const userSchema = new mongoose.Schema({
   role: {
     type: String,
     enum: [
-      'master_admin',
       'super_admin',
       'admin',
-      'teacher',
-      'fee_editor',
-      'exam_controller',
-      'exam_officer',
-      'exam_leader'
+      'teacher'
     ],
     default: 'admin'
   },
@@ -106,6 +101,8 @@ const userSchema = new mongoose.Schema({
     default: true
   },
   lastLogin: Date,
+  resetPasswordOtp: String,
+  resetPasswordExpires: Date,
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
@@ -144,7 +141,7 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
 
 // Method to check permission
 userSchema.methods.hasPermission = function(module, action) {
-  if (this.role === 'master_admin' || this.role === 'super_admin') return true;
+  if (this.role === 'super_admin') return true;
   
   const modulePermission = this.permissions.find(p => p.module === module);
   return modulePermission && modulePermission.actions.includes(action);

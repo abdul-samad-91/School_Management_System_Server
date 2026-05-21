@@ -48,13 +48,13 @@ const subjectSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['theory', 'practical', 'elective'],
-    default: 'theory'
+    enum: ['Theory', 'Practical', 'Elective'],
+    default: 'Theory'
   },
   priority: {
     type: String,
-    enum: ['core', 'optional'],
-    default: 'core'
+    enum: ['Core', 'Optional'],
+    default: 'Core'
   },
   classes: [{
     classId: {

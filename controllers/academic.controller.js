@@ -715,149 +715,10 @@ const populateSubjectById = (subjectId) =>
     .populate('classes.classId', 'name level')
     .populate('classes.teacher', 'employeeId profile.firstName profile.lastName');
 
-const ensureTimetableBelongsToScope = async (timetableId, schoolId) => {
-  const query = { _id: ensureObjectId(timetableId, 'timetableId') };
-
-  if (schoolId) {
-    query.school = schoolId;
-  }
-
-  const timetable = await Timetable.findOne(query);
-
-  if (!timetable) {
-    throw createAcademicError('Timetable not found', 404);
-  }
-
-  return timetable;
-};
-
 const populateGradingSystemById = (gradingSystemId) =>
   GradingSystem.findById(gradingSystemId)
     .populate('school', 'name code')
     .populate('session', 'name startDate endDate');
-
-const populateTimetableById = (timetableId) =>
-  Timetable.findById(timetableId)
-    .populate('school', 'name code')
-    .populate('class', 'name level')
-    .populate('session', 'name startDate endDate')
-    .populate('schedule.periods.subject', 'name code')
-    .populate('schedule.periods.teacher', 'employeeId profile.firstName profile.lastName');
-
-const getLatestTimetableVersion = async ({ schoolId, sessionId, classId, section }) => {
-  const latestTimetable = await Timetable.findOne({
-    school: schoolId,
-    session: sessionId,
-    class: classId,
-    section
-  })
-    .sort({ version: -1 })
-    .select('version');
-
-  return latestTimetable?.version || 0;
-};
-
-const validateTimetablePeriodsAgainstSubjects = async ({
-  schoolId,
-  sessionId,
-  classDoc,
-  section,
-  schedule
-}) => {
-  const lecturePeriods = (schedule || []).flatMap((day) =>
-    (day.periods || []).filter((period) => ['lecture', 'lab'].includes(period.type))
-  );
-
-  if (lecturePeriods.length === 0) {
-    return;
-  }
-
-  const subjectIds = [
-    ...new Set(lecturePeriods.map((period) => ensureObjectId(period.subject, 'subject')))
-  ];
-  const teacherIds = [
-    ...new Set(lecturePeriods.map((period) => ensureObjectId(period.teacher, 'teacher')))
-  ];
-
-  const [subjects, teacherMap] = await Promise.all([
-    Subject.find({
-      _id: { $in: subjectIds },
-      school: schoolId,
-      session: sessionId,
-      'classes.classId': classDoc._id
-    }).select('_id classes'),
-    ensureTeacherDocuments(teacherIds)
-  ]);
-
-  const subjectsById = new Map(subjects.map((subject) => [toIdString(subject._id), subject]));
-
-  lecturePeriods.forEach((period) => {
-    const subjectId = toIdString(period.subject);
-    const teacherId = toIdString(period.teacher);
-    const subject = subjectsById.get(subjectId);
-
-    if (!subject) {
-      throw createAcademicError(
-        'Every timetable subject must belong to the same class, branch and session'
-      );
-    }
-
-    if (!teacherMap.has(teacherId)) {
-      throw createAcademicError('Assigned timetable teacher was not found', 404);
-    }
-
-    const classAssignment = subject.classes.find(
-      (assignment) => toIdString(assignment.classId) === toIdString(classDoc._id)
-    );
-
-    if (!classAssignment) {
-      throw createAcademicError('Timetable subject is not assigned to this class');
-    }
-
-    if (classAssignment.sections?.length > 0 && !classAssignment.sections.includes(section)) {
-      throw createAcademicError(
-        `Subject timetable can only be created for these sections: ${classAssignment.sections.join(', ')}`
-      );
-    }
-
-    if (
-      classAssignment.teacher &&
-      toIdString(classAssignment.teacher) !== teacherId
-    ) {
-      throw createAcademicError(
-        'Timetable teacher must match the teacher assigned to the subject for that class'
-      );
-    }
-  });
-};
-
-const syncTimetableReferenceOnClass = async ({
-  timetableId,
-  classId,
-  section,
-  previousClassId,
-  previousSection
-}) => {
-  if (
-    previousClassId &&
-    previousSection &&
-    (toIdString(previousClassId) !== toIdString(classId) || previousSection !== section)
-  ) {
-    await Class.updateOne(
-      {
-        _id: previousClassId,
-        'sections.name': previousSection,
-        'sections.Timetable': timetableId
-      },
-      { $set: { 'sections.$.Timetable': null } }
-    );
-  }
-
-  await Class.updateOne(
-    { _id: classId, 'sections.name': section },
-    { $set: { 'sections.$.Timetable': timetableId } }
-  );
-};
 
 // ========== Academic Sessions ==========
 
@@ -1041,12 +902,44 @@ export const getClass = async (req, res) => {
 
 export const createClass = async (req, res) => {
   try {
-    const session = await ensureSessionExists(
-      req.body.session,
-      resolveScopedSchoolId(req, req.body.school)
-    );
-    const schoolId = resolveRequiredSchoolId(req, req.body.school || session.school);
+    const schoolId = resolveRequiredSchoolId(req, req.body.school);
+    // Auto-resolve active session if not provided
+    let sessionId = req.body.session;
+    if (!sessionId) {
+      const activeSession = await AcademicSession.findOne({ school: schoolId, isActive: true });
+      if (!activeSession) {
+        return res.status(400).json({
+          success: false,
+          message: 'No active academic session found. Please create one first.'
+        });
+      }
+      sessionId = activeSession._id;
+    }
+    
+    const session = await ensureSessionExists(sessionId, schoolId);
     const sections = normalizeSectionsPayload(req.body.sections) || [];
+    
+    // Check for duplicate class+section combinations in the same session
+    if (sections.length > 0) {
+      const sectionNames = sections.map(s => s.name?.trim().toLowerCase());
+      const existingClasses = await Class.findOne({
+        school: schoolId,
+        session: session._id,
+        name: req.body.name?.trim(),
+        'sections.name': { $in: sectionNames }
+      });
+      
+      if (existingClasses) {
+        const duplicateSections = existingClasses.sections
+          .filter(s => sectionNames.includes(s.name?.trim().toLowerCase()))
+          .map(s => s.name);
+        return res.status(400).json({
+          success: false,
+          message: `Class "${req.body.name}" already exists with section(s): ${duplicateSections.join(', ')}`
+        });
+      }
+    }
+    
     const teacherIds = collectTeacherIdsFromSections(sections);
     const studentIds = collectStudentIdsFromSections(sections);
 
@@ -1184,13 +1077,23 @@ export const getSubjects = async (req, res) => {
   }
 };
 
-export const createSubject = async (req, res) => {
+export const createSubject = async (req, res) => {  
   try {
-    const session = await ensureSessionExists(
-      req.body.session,
-      resolveScopedSchoolId(req, req.body.school)
-    );
-    const schoolId = resolveRequiredSchoolId(req, req.body.school || session.school);
+    const schoolId = resolveRequiredSchoolId(req, req.body.school);
+    // Auto-resolve active session if not provided
+    let session = req.body.session;
+    if (!session) {
+      const activeSession = await AcademicSession.findOne({ school: schoolId, isActive: true });
+      if (!activeSession) {
+        return res.status(400).json({
+          success: false,
+          message: 'No active academic session found. Please create one first.'
+        });
+      }
+      session = activeSession._id;
+    }
+    
+    const sessionDoc = await ensureSessionExists(session, schoolId);
     const classes = normalizeSubjectClassesPayload(req.body.classes) || [];
 
     await Promise.all([
@@ -1198,14 +1101,14 @@ export const createSubject = async (req, res) => {
       validateSubjectClasses({
         classes,
         schoolId,
-        sessionId: toIdString(session._id)
+        sessionId: toIdString(sessionDoc._id)
       })
     ]);
 
     const subject = await Subject.create({
       ...req.body,
       school: schoolId,
-      session: session._id,
+      session: sessionDoc._id,
       classes
     });
 
@@ -1271,6 +1174,42 @@ export const updateSubject = async (req, res) => {
       success: true,
       message: 'Subject updated successfully',
       data: populatedSubject
+    });
+  } catch (error) {
+    handleAcademicError(res, error);
+  }
+};
+
+export const deleteSubject = async (req, res) => {
+  try {
+    const scope = {};
+    const schoolId = resolveScopedSchoolId(req, req.query.school);
+
+    if (schoolId) {
+      scope.school = schoolId;
+    }
+
+    const subject = await Subject.findOne({
+      _id: req.params.id,
+      ...scope
+    });
+
+    if (!subject) {
+      return res.status(404).json({ success: false, message: 'Subject not found' });
+    }
+
+    const previousClasses = subject.classes || [];
+
+    await Subject.findByIdAndDelete(subject._id);
+
+    await syncTeachersForSubject({ 
+      subject: { ...subject.toObject(), classes: [] }, 
+      previousClasses 
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Subject deleted successfully'
     });
   } catch (error) {
     handleAcademicError(res, error);
@@ -1375,30 +1314,13 @@ export const updateGradingSystem = async (req, res) => {
 
 export const getTimetables = async (req, res) => {
   try {
-    const query = {};
     const schoolId = resolveScopedSchoolId(req, req.query.school);
-
-    if (schoolId) {
-      query.school = schoolId;
-    }
-
-    if (req.query.classId) query.class = ensureObjectId(req.query.classId, 'classId');
-    if (req.query.section) query.section = normalizeTrimmedString(req.query.section, 'section');
+    const query = {};
+    if (schoolId) query.school = schoolId;
     if (req.query.session) query.session = ensureObjectId(req.query.session, 'session');
+    if (req.query.classId) query.class = ensureObjectId(req.query.classId, 'classId');
 
-    const isActive = normalizeBoolean(req.query.isActive);
-    if (isActive !== undefined) {
-      query.isActive = isActive;
-    }
-
-    const timetables = await Timetable.find(query)
-      .populate('school', 'name code')
-      .populate('class', 'name level')
-      .populate('session', 'name')
-      .populate('schedule.periods.subject', 'name code')
-      .populate('schedule.periods.teacher', 'employeeId profile.firstName profile.lastName')
-      .sort({ isActive: -1, version: -1, effectiveFrom: -1 });
-
+    const timetables = await Timetable.find(query).sort({ label: 1 });
     res.status(200).json({ success: true, data: timetables });
   } catch (error) {
     handleAcademicError(res, error);
@@ -1408,10 +1330,14 @@ export const getTimetables = async (req, res) => {
 export const getTimetable = async (req, res) => {
   try {
     const schoolId = resolveScopedSchoolId(req, req.query.school);
-    const timetable = await ensureTimetableBelongsToScope(req.params.id, schoolId);
-    const populatedTimetable = await populateTimetableById(timetable._id);
+    const query = { _id: ensureObjectId(req.params.id, 'id') };
+    if (schoolId) query.school = schoolId;
 
-    res.status(200).json({ success: true, data: populatedTimetable });
+    const timetable = await Timetable.findOne(query);
+    if (!timetable) {
+      return res.status(404).json({ success: false, message: 'Timetable not found' });
+    }
+    res.status(200).json({ success: true, data: timetable });
   } catch (error) {
     handleAcademicError(res, error);
   }
@@ -1419,74 +1345,24 @@ export const getTimetable = async (req, res) => {
 
 export const createTimetable = async (req, res) => {
   try {
-    const requestedSchoolId = resolveScopedSchoolId(req, req.body.school);
-    const classDoc = await ensureClassExists(req.body.class, requestedSchoolId);
-    const schoolId = resolveRequiredSchoolId(req, requestedSchoolId || classDoc.school);
-    const session = await ensureSessionExists(
-      req.body.session || classDoc.session,
-      schoolId
-    );
-    const section = normalizeTrimmedString(req.body.section, 'section', { required: true });
-
-    ensureSectionsBelongToClass([section], classDoc, 'section');
-
-    await validateTimetablePeriodsAgainstSubjects({
-      schoolId,
-      sessionId: toIdString(session._id),
-      classDoc,
-      section,
-      schedule: req.body.schedule || []
-    });
-
-    const timetablePayload = {
-      ...req.body,
-      school: schoolId,
-      class: classDoc._id,
-      session: session._id,
-      section,
-      version:
-        req.body.version !== undefined
-          ? Number(req.body.version)
-          : (await getLatestTimetableVersion({
-              schoolId,
-              sessionId: session._id,
-              classId: classDoc._id,
-              section
-            })) + 1
-    };
-
-    const timetable = new Timetable(timetablePayload);
-    await timetable.validate();
-
-    if (timetable.isActive) {
-      await Timetable.updateMany(
-        {
-          _id: { $ne: timetable._id },
-          school: schoolId,
-          session: session._id,
-          class: classDoc._id,
-          section,
-          isActive: true
-        },
-        { $set: { isActive: false } }
-      );
+    const schoolId = resolveScopedSchoolId(req, req.body.school);
+    if (!schoolId) {
+      return res.status(400).json({ success: false, message: 'School is required' });
+    }
+    if (!req.body.label) {
+      return res.status(400).json({ success: false, message: 'Label is required' });
     }
 
-    await timetable.save();
-
-    await syncTimetableReferenceOnClass({
-      timetableId: timetable._id,
-      classId: classDoc._id,
-      section
+    const timetable = await Timetable.create({
+      school: schoolId,
+      session: req.body.session || null,
+      class: req.body.class || null,
+      label: req.body.label,
+      days: req.body.days || [],
+      isActive: true,
     });
 
-    const populatedTimetable = await populateTimetableById(timetable._id);
-
-    res.status(201).json({
-      success: true,
-      message: 'Timetable created successfully',
-      data: populatedTimetable
-    });
+    res.status(201).json({ success: true, message: 'Timetable created successfully', data: timetable });
   } catch (error) {
     handleAcademicError(res, error);
   }
@@ -1494,87 +1370,21 @@ export const createTimetable = async (req, res) => {
 
 export const updateTimetable = async (req, res) => {
   try {
-    const scope = {};
     const schoolId = resolveScopedSchoolId(req, req.body.school || req.query.school);
+    const query = { _id: ensureObjectId(req.params.id, 'id') };
+    if (schoolId) query.school = schoolId;
 
-    if (schoolId) {
-      scope.school = schoolId;
-    }
-
-    const timetable = await Timetable.findOne({
-      _id: req.params.id,
-      ...scope
-    });
-
+    const timetable = await Timetable.findOne(query);
     if (!timetable) {
       return res.status(404).json({ success: false, message: 'Timetable not found' });
     }
 
-    const classDoc = req.body.class
-      ? await ensureClassExists(req.body.class, toIdString(timetable.school))
-      : await ensureClassExists(timetable.class, toIdString(timetable.school));
-    const session = req.body.session
-      ? await ensureSessionExists(req.body.session, toIdString(timetable.school))
-      : await ensureSessionExists(timetable.session, toIdString(timetable.school));
-    const section =
-      normalizeTrimmedString(req.body.section, 'section') || timetable.section;
-
-    ensureSectionsBelongToClass([section], classDoc, 'section');
-
-    const previousClassId = timetable.class;
-    const previousSection = timetable.section;
-
-    timetable.set({
-      ...req.body,
-      school: timetable.school,
-      class: classDoc._id,
-      session: session._id,
-      section,
-      version:
-        req.body.version !== undefined ? Number(req.body.version) : timetable.version
-    });
-
-    await validateTimetablePeriodsAgainstSubjects({
-      schoolId: toIdString(timetable.school),
-      sessionId: toIdString(session._id),
-      classDoc,
-      section,
-      schedule: timetable.schedule || []
-    });
-
-    await timetable.validate();
-
-    if (timetable.isActive) {
-      await Timetable.updateMany(
-        {
-          _id: { $ne: timetable._id },
-          school: timetable.school,
-          session: session._id,
-          class: classDoc._id,
-          section,
-          isActive: true
-        },
-        { $set: { isActive: false } }
-      );
-    }
+    if (req.body.label !== undefined) timetable.label = req.body.label;
+    if (req.body.days !== undefined) timetable.days = req.body.days;
+    if (req.body.isActive !== undefined) timetable.isActive = req.body.isActive;
 
     await timetable.save();
-
-    await syncTimetableReferenceOnClass({
-      timetableId: timetable._id,
-      classId: classDoc._id,
-      section,
-      previousClassId,
-      previousSection
-    });
-
-    const populatedTimetable = await populateTimetableById(timetable._id);
-
-    res.status(200).json({
-      success: true,
-      message: 'Timetable updated successfully',
-      data: populatedTimetable
-    });
+    res.status(200).json({ success: true, message: 'Timetable updated successfully', data: timetable });
   } catch (error) {
     handleAcademicError(res, error);
   }

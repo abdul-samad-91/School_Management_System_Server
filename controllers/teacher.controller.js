@@ -276,8 +276,6 @@ export const createTeacher = async (req, res) => {
 
     const statusValue = typeof req.body.status === 'string' ? req.body.status.trim() : req.body.status;
 
-    // res.status(201).json(documentEntries)
-
     const teacherPayload = {
       employeeId,
       profile,
@@ -289,7 +287,9 @@ export const createTeacher = async (req, res) => {
       salary,
       documents: documentEntries,
       userId: req.body.userId || undefined,
-      status: statusValue || 'active'
+      status: statusValue || 'active',
+      subjectName: req.body.subjectName || undefined,
+      classLabel: req.body.classLabel || undefined
     };
 
     const teacher = new Teacher(teacherPayload);
@@ -467,6 +467,14 @@ export const updateTeacher = async (req, res) => {
 
     if (req.body.status !== undefined) {
       updateData.status = typeof req.body.status === 'string' ? req.body.status.trim() : req.body.status;
+    }
+
+    if (req.body.subjectName !== undefined) {
+      updateData.subjectName = req.body.subjectName;
+    }
+
+    if (req.body.classLabel !== undefined) {
+      updateData.classLabel = req.body.classLabel;
     }
 
     const existingExperience = teacher.experience.map((entry) => normalizeExperienceEntry(toPlainObject(entry)));

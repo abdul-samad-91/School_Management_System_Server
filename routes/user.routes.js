@@ -2,6 +2,7 @@ import express from 'express';
 import {
   getUsers,
   getUser,
+  createUser,
   updateUser,
   updateUserPermissions,
   toggleUserStatus,
@@ -12,6 +13,7 @@ import { protect, authorize } from '../middleware/auth.js';
 const router = express.Router();
 
 router.get('/', protect, authorize('super_admin'), getUsers);
+router.post('/', protect, authorize('super_admin'), createUser);
 router.get('/:id', protect, authorize('super_admin'), getUser);
 router.put('/:id', protect, authorize('super_admin'), updateUser);
 router.put('/:id/permissions', protect, authorize('super_admin'), updateUserPermissions);

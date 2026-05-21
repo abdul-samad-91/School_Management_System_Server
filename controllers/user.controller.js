@@ -592,3 +592,82 @@ export const deleteUser = async (req, res) => {
     handleUserError(res, error);
   }
 };
+
+export const createUser = async (req, res) => {
+  try {
+    const { name, username, email, password, role, assignedClass, permissions } = req.body;
+
+    if (!email) {
+      throw createUserError('email is required');
+    }
+    if (!password || password.length < 6) {
+      throw createUserError('password is required and must be at least 6 characters');
+    }
+    if (!role) {
+      throw createUserError('role is required');
+    }
+
+    const normalizedRole = normalizeRole(role);
+
+    // Derive username from email if not provided
+    const normalizedUsername = username
+      ? username.trim().toLowerCase()
+      : email.split('@')[0].toLowerCase();
+
+    await ensureUniqueUsername(normalizedUsername);
+    await ensureUniqueEmail(email.toLowerCase());
+
+    // Parse name into firstName/lastName
+    let firstName = '', lastName = '';
+    if (name) {
+      const parts = name.trim().split(/\s+/);
+      firstName = parts[0] || '';
+      lastName = parts.slice(1).join(' ') || '';
+    }
+
+    const schoolId = req.user?.school ? toIdString(req.user.school) : null;
+
+    const userData = {
+      username: normalizedUsername,
+      email: email.toLowerCase(),
+      password,
+      role: normalizedRole,
+      school: schoolId || undefined,
+      profile: {
+        firstName: firstName || normalizedUsername,
+        lastName: lastName || ''
+      },
+      isActive: true,
+      createdBy: req.user._id
+    };
+
+    if (assignedClass) {
+      userData.assignedClass = assignedClass;
+    }
+
+    if (permissions && Array.isArray(permissions)) {
+      userData.permissions = normalizePermissions(permissions);
+    }
+
+    const user = await User.create(userData);
+
+    const populatedUser = await User.findById(user._id)
+      .select('-password')
+      .populate('school', 'name code');
+
+    res.status(201).json({
+      success: true,
+      message: 'User created successfully',
+      data: populatedUser
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username or email already exists'
+      });
+    }
+    handleUserError(res, error);
+  }
+};
+

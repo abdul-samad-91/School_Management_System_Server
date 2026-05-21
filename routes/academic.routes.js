@@ -11,6 +11,7 @@ import {
   getSubjects,
   createSubject,
   updateSubject,
+  deleteSubject,
   getGradingSystems,
   createGradingSystem,
   updateGradingSystem,
@@ -27,7 +28,7 @@ const router = express.Router();
 router.get('/sessions', protect, checkPermission('academics', 'view'), getSessions);
 router.post('/sessions', protect, checkPermission('academics', 'create'), createSession);
 router.put('/sessions/:id', protect, checkPermission('academics', 'update'), updateSession);
-router.put('/sessions/:id/activate', protect, checkPermission('academics', 'update'), setActiveSession);
+router.post('/sessions/:id/setActive', protect, checkPermission('academics', 'update'), setActiveSession);
 
 // Classes
 router.get('/classes', protect, checkPermission('academics', 'view'), getClasses);
@@ -39,6 +40,7 @@ router.put('/classes/:id', protect, checkPermission('academics', 'update'), upda
 router.get('/subjects', protect, checkPermission('academics', 'view'), getSubjects);
 router.post('/subjects', protect, checkPermission('academics', 'create'), createSubject);
 router.put('/subjects/:id', protect, checkPermission('academics', 'update'), updateSubject);
+router.delete('/subjects/:id', protect, checkPermission('academics', 'delete'), deleteSubject);
 
 // Grading Systems
 router.get('/grading-systems', protect, checkPermission('academics', 'view'), getGradingSystems);

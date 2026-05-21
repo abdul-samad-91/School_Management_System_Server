@@ -229,13 +229,13 @@ export const getDashboardStats = async (req, res) => {
         $match: {
           ...buildScopedQuery(schoolId),
           ...(sessionId ? { session: activeSession._id } : {}),
-          status: { $in: ['paid', 'partial'] }
+          status: { $in: ['Paid', 'Partial'] }
         }
       },
       {
         $group: {
           _id: null,
-          totalCollected: { $sum: '$amountPaid' },
+          totalCollected: { $sum: '$paidAmount' },
           transactionCount: { $sum: 1 }
         }
       }
@@ -246,13 +246,13 @@ export const getDashboardStats = async (req, res) => {
         $match: {
           ...buildScopedQuery(schoolId),
           paidDate: { $gte: currentMonthStart },
-          status: { $in: ['paid', 'partial'] }
+          status: { $in: ['Paid', 'Partial'] }
         }
       },
       {
         $group: {
           _id: null,
-          totalCollected: { $sum: '$amountPaid' }
+          totalCollected: { $sum: '$paidAmount' }
         }
       }
     ]);
@@ -260,21 +260,21 @@ export const getDashboardStats = async (req, res) => {
     const upcomingExams = await Exam.find({
       ...buildScopedQuery(schoolId),
       ...(sessionId ? { session: activeSession._id } : {}),
-      startDate: { $gte: new Date() }
+      date: { $gte: new Date() }
     })
-      .sort({ startDate: 1 })
+      .sort({ date: 1 })
       .limit(5)
-      .populate('classes', 'name level')
+      .populate('class', 'name level')
       .populate('session', 'name');
 
     const recentPayments = await FeePayment.find({
       ...buildScopedQuery(schoolId),
-      status: { $in: ['paid', 'partial'] }
+      status: { $in: ['Paid', 'Partial'] }
     })
       .sort({ paidDate: -1, createdAt: -1 })
       .limit(5)
       .populate('student', 'admissionNumber rollNumber profile.firstName profile.lastName')
-      .populate('feeStructure', 'name')
+      .populate('feeStructure', 'feeType amount className')
       .populate('collectedBy', 'username profile.firstName profile.lastName');
 
     const recentAnnouncements = await Announcement.find({
@@ -440,7 +440,7 @@ export const getFeeChart = async (req, res) => {
           ...buildScopedQuery(schoolId),
           ...(activeSession?._id ? { session: activeSession._id } : {}),
           paidDate: { $gte: rangeStart },
-          status: { $in: ['paid', 'partial'] }
+          status: { $in: ['Paid', 'Partial'] }
         }
       },
       {
@@ -449,7 +449,7 @@ export const getFeeChart = async (req, res) => {
             year: { $year: '$paidDate' },
             month: { $month: '$paidDate' }
           },
-          totalCollected: { $sum: '$amountPaid' },
+          totalCollected: { $sum: '$paidAmount' },
           count: { $sum: 1 }
         }
       }

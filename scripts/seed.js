@@ -42,45 +42,62 @@ const seedDatabase = async () => {
     }
 
     // Create default academic session
+    // Note: AcademicSession requires a school, so it will be created when a school is set up.
+    // Here we only seed if a school already exists.
     const sessionExists = await AcademicSession.findOne();
     
     if (!sessionExists) {
-      const currentYear = new Date().getFullYear();
-      await AcademicSession.create({
-        name: `${currentYear}-${currentYear + 1}`,
-        startDate: new Date(`${currentYear}-04-01`),
-        endDate: new Date(`${currentYear + 1}-03-31`),
-        isActive: true,
-        isLocked: false,
-        description: 'Default academic session'
-      });
-      console.log('✅ Default academic session created');
+      const existingSchool = await School.findOne();
+      if (existingSchool) {
+        const currentYear = new Date().getFullYear();
+        await AcademicSession.create({
+          name: `${currentYear}-${currentYear + 1}`,
+          startDate: new Date(`${currentYear}-04-01`),
+          endDate: new Date(`${currentYear + 1}-03-31`),
+          isActive: true,
+          isLocked: false,
+          description: 'Default academic session',
+          school: existingSchool._id
+        });
+        console.log('✅ Default academic session created');
+      } else {
+        console.log('ℹ️  Skipping academic session (no school exists yet — create a school first)');
+      }
     } else {
       console.log('ℹ️  Academic session already exists');
     }
 
     // Create default grading system
+    // Note: GradingSystem requires school and session
     const gradingSystemExists = await GradingSystem.findOne();
     
     if (!gradingSystemExists) {
-      await GradingSystem.create({
-        name: 'Standard Grading System',
-        type: 'letter',
-        grades: [
-          { name: 'A+', minPercentage: 90, maxPercentage: 100, gradePoint: 10, description: 'Outstanding' },
-          { name: 'A', minPercentage: 80, maxPercentage: 89, gradePoint: 9, description: 'Excellent' },
-          { name: 'B+', minPercentage: 70, maxPercentage: 79, gradePoint: 8, description: 'Very Good' },
-          { name: 'B', minPercentage: 60, maxPercentage: 69, gradePoint: 7, description: 'Good' },
-          { name: 'C+', minPercentage: 50, maxPercentage: 59, gradePoint: 6, description: 'Above Average' },
-          { name: 'C', minPercentage: 40, maxPercentage: 49, gradePoint: 5, description: 'Average' },
-          { name: 'D', minPercentage: 33, maxPercentage: 39, gradePoint: 4, description: 'Pass' },
-          { name: 'F', minPercentage: 0, maxPercentage: 32, gradePoint: 0, description: 'Fail' }
-        ],
-        passingGrade: 'D',
-        isDefault: true,
-        isActive: true
-      });
-      console.log('✅ Default grading system created');
+      const existingSchool = await School.findOne();
+      const existingSession = await AcademicSession.findOne();
+      if (existingSchool && existingSession) {
+        await GradingSystem.create({
+          name: 'Standard Grading System',
+          type: 'letter',
+          grades: [
+            { name: 'A+', minPercentage: 90, maxPercentage: 100, gradePoint: 10, description: 'Outstanding' },
+            { name: 'A', minPercentage: 80, maxPercentage: 89, gradePoint: 9, description: 'Excellent' },
+            { name: 'B+', minPercentage: 70, maxPercentage: 79, gradePoint: 8, description: 'Very Good' },
+            { name: 'B', minPercentage: 60, maxPercentage: 69, gradePoint: 7, description: 'Good' },
+            { name: 'C+', minPercentage: 50, maxPercentage: 59, gradePoint: 6, description: 'Above Average' },
+            { name: 'C', minPercentage: 40, maxPercentage: 49, gradePoint: 5, description: 'Average' },
+            { name: 'D', minPercentage: 33, maxPercentage: 39, gradePoint: 4, description: 'Pass' },
+            { name: 'F', minPercentage: 0, maxPercentage: 32, gradePoint: 0, description: 'Fail' }
+          ],
+          passingGrade: 'D',
+          isDefault: true,
+          isActive: true,
+          school: existingSchool._id,
+          session: existingSession._id
+        });
+        console.log('✅ Default grading system created');
+      } else {
+        console.log('ℹ️  Skipping grading system (requires both school and session)');
+      }
     } else {
       console.log('ℹ️  Grading system already exists');
     }

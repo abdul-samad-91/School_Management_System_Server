@@ -1,4 +1,3 @@
-import { model } from 'mongoose';
 import School from '../models/School.model.js';
 
 const allowedSchoolFields = [
@@ -146,7 +145,7 @@ export const getSchool = async (req, res) => {
 
 export const getSchoolProfile = async (req, res) => {
   try {
-    const school = await School.findOne({ isActive: true }).sort({ updatedAt: -1 });
+    const school = await School.findOne({ isActive: true }).sort({ updatedAt: -1 }).lean();
 
     if (!school) {
       return res.status(404).json({
@@ -155,9 +154,20 @@ export const getSchoolProfile = async (req, res) => {
       });
     }
 
+    // Return flattened fields for frontend compatibility
+    const flatData = {
+      ...school,
+      phone: school.contact?.phone?.[0] || '',
+      email: school.contact?.email || '',
+      registrationNumber: school.registration?.number || '',
+      address: school.address?.street
+        ? [school.address.street, school.address.city, school.address.state, school.address.country].filter(Boolean).join(', ')
+        : ''
+    };
+
     res.status(200).json({
       success: true,
-      data: school
+      data: flatData
     });
   } catch (error) {
     handleSchoolError(res, error);
@@ -197,6 +207,12 @@ export const createSchoolProfile = async (req, res) => {
 export const updateSchoolProfile = async (req, res) => {
   try {
     const updates = pickAllowedFields(req.body);
+
+    // Handle logo uploaded as a file (Cloudinary URL comes back in req.file.path)
+    if (req.file) {
+      updates.logo = req.file.path || req.file.secure_url || req.file.url;
+    }
+
     const school = await School.findById(req.params.id);
 
     if (!school) {

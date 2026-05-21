@@ -405,7 +405,8 @@ export const getStudents = async (req, res) => {
   try {
     const {
       status,
-      class: classId,
+      class: classIdFromClass,
+      classId: classIdFromClassId,
       section,
       session,
       search,
@@ -416,7 +417,12 @@ export const getStudents = async (req, res) => {
     const currentPage = Number(page) || 1;
     const perPage = Number(limit) || 10;
     const query = {};
+    
+    if (req.user?.school) {
+      query.school = req.user.school;
+    }
 
+    const classId = classIdFromClass || classIdFromClassId;
     if (status) query.status = status;
     if (classId) query['academic.currentClass'] = classId;
     if (section) query['academic.currentSection'] = section;
@@ -469,6 +475,14 @@ export const getStudent = async (req, res) => {
       });
     }
 
+    // Ensure student belongs to user's school
+    if (req.user?.school && student.school && student.school.toString() !== req.user.school.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to access this student'
+      });
+    }
+
     res.status(200).json({
       success: true,
       data: student
@@ -483,19 +497,19 @@ export const getStudent = async (req, res) => {
 
 export const createStudent = async (req, res) => {
   try {
+    console.log('📝 [Student Create] Starting student creation...');
+    console.log('📁 [Student Create] Files received:', req.files ? Object.keys(req.files) : 'no files');
+    
     if (!req.files?.photo || req.files.photo.length === 0) {
+      console.log('❌ [Student Create] No photo provided');
       return res.status(400).json({
         success: false,
         message: 'Profile photo is required'
       });
     }
 
-    if (!req.files?.documents || req.files.documents.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'At least one student document is required'
-      });
-    }
+    // Documents are now optional
+    console.log('✅ [Student Create] Photo validated');
 
     let admissionNumber =
       normalizeUppercaseString(req.body.admissionNumber) ||
@@ -531,6 +545,17 @@ export const createStudent = async (req, res) => {
 
     const normalizedProfile = normalizeProfilePayload(profile);
     const normalizedParents = normalizeParentsPayload(parentsInput);
+
+    const hasBiologicalParent = normalizedParents.some(
+      (p) => p.relationship === 'father' || p.relationship === 'mother'
+    );
+    const hasGuardianEntry = normalizedParents.some((p) => p.relationship === 'guardian');
+    if (!hasBiologicalParent && !hasGuardianEntry) {
+      throw createValidationError(
+        'Guardian information is required when no parent (father or mother) is provided'
+      );
+    }
+
     const normalizedEmergencyContact =
       emergencyContactInput !== undefined
         ? normalizeEmergencyContactPayload(emergencyContactInput)
@@ -551,6 +576,7 @@ export const createStudent = async (req, res) => {
     const admissionStatusValue = normalizeTrimmedString(req.body.admissionStatus);
 
     const studentPayload = {
+      school: req.user.school,
       admissionNumber,
       registrationNumber: registrationNumber || undefined,
       rollNumber: rollNumber || undefined,
@@ -565,14 +591,19 @@ export const createStudent = async (req, res) => {
     };
 
     const student = new Student(studentPayload);
+    console.log('💾 [Student Create] Saving student to database...');
     await student.save();
+    console.log('✅ [Student Create] Student saved successfully:', student._id);
 
     res.status(201).json({
       success: true,
       message: 'Student created successfully',
       data: student
     });
+    console.log('📤 [Student Create] Response sent');
   } catch (error) {
+    console.error('❌ [Student Create] Error:', error.message);
+    console.error('Stack:', error.stack);
     res.status(error.statusCode || 500).json({
       success: false,
       message: error.message
@@ -588,6 +619,14 @@ export const updateStudent = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Student not found'
+      });
+    }
+
+    // Ensure student belongs to user's school
+    if (req.user?.school && student.school && student.school.toString() !== req.user.school.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to update this student'
       });
     }
 
@@ -690,7 +729,17 @@ export const updateStudent = async (req, res) => {
     }
 
     if (parentsInput !== undefined) {
-      updateData.parents = normalizeParentsPayload(parentsInput);
+      const updatedParents = normalizeParentsPayload(parentsInput);
+      const hasBiologicalParent = updatedParents.some(
+        (p) => p.relationship === 'father' || p.relationship === 'mother'
+      );
+      const hasGuardianEntry = updatedParents.some((p) => p.relationship === 'guardian');
+      if (!hasBiologicalParent && !hasGuardianEntry) {
+        throw createValidationError(
+          'Guardian information is required when no parent (father or mother) is provided'
+        );
+      }
+      updateData.parents = updatedParents;
     }
 
     if (emergencyContactInput !== undefined) {
@@ -804,7 +853,7 @@ export const updateStudent = async (req, res) => {
 
 export const deleteStudent = async (req, res) => {
   try {
-    const student = await Student.findByIdAndDelete(req.params.id);
+    const student = await Student.findById(req.params.id);
 
     if (!student) {
       return res.status(404).json({
@@ -812,6 +861,16 @@ export const deleteStudent = async (req, res) => {
         message: 'Student not found'
       });
     }
+
+    // Ensure student belongs to user's school
+    if (req.user?.school && student.school && student.school.toString() !== req.user.school.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to delete this student'
+      });
+    }
+
+    await Student.findByIdAndDelete(req.params.id);
 
     res.status(200).json({
       success: true,
@@ -835,6 +894,14 @@ export const updateStudentStatus = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Student not found'
+      });
+    }
+
+    // Ensure student belongs to user's school
+    if (req.user?.school && student.school && student.school.toString() !== req.user.school.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to update this student'
       });
     }
 
@@ -871,6 +938,14 @@ export const approveAdmission = async (req, res) => {
       });
     }
 
+    // Ensure student belongs to the user's school
+    if (req.user.school && student.school && student.school.toString() !== req.user.school.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to approve students from another school'
+      });
+    }
+
     student.admissionStatus = 'approved';
     student.status = 'active';
     await student.save();
@@ -892,8 +967,14 @@ export const promoteStudents = async (req, res) => {
   try {
     const { studentIds, toClass, toSection, toSession } = req.body;
 
+    // School-scoped: only promote students belonging to this school
+    const filter = { _id: { $in: studentIds } };
+    if (req.user.school) {
+      filter.school = req.user.school;
+    }
+
     const result = await Student.updateMany(
-      { _id: { $in: studentIds } },
+      filter,
       {
         $set: {
           'academic.currentClass': toClass,

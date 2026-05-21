@@ -6,29 +6,27 @@ const attendanceSchema = new mongoose.Schema({
     ref: 'School',
     required: true
   },
+  type: {
+    type: String,
+    enum: ['student', 'teacher'],
+    default: 'student'
+  },
   student: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Student',
-    required: true
-  },
-  class: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Class',
-    required: true
-  },
-  section: {
-    type: String,
-    required: true
-  },
-  subject: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Subject',
-    required: true
+    ref: 'Student'
   },
   teacher: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Teacher',
-    required: true
+    ref: 'Teacher'
+  },
+  class: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Class'
+  },
+  section: String,
+  subject: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Subject'
   },
   date: {
     type: Date,
@@ -36,7 +34,7 @@ const attendanceSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['present', 'absent', 'late', 'leave', 'half_day'],
+    enum: ['present', 'absent', 'late', 'leave', 'half_day', 'holiday'],
     required: true
   },
   remarks: String,
@@ -47,8 +45,7 @@ const attendanceSchema = new mongoose.Schema({
   },
   session: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'AcademicSession',
-    required: true
+    ref: 'AcademicSession'
   },
   corrections: [{
     previousStatus: String,
@@ -67,10 +64,16 @@ const attendanceSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Compound index to ensure unique attendance per student per subject per day
+// Compound index for student attendance per day
 attendanceSchema.index(
-  { school: 1, student: 1, subject: 1, date: 1 },
-  { unique: true }
+  { school: 1, type: 1, student: 1, date: 1 },
+  { unique: true, partialFilterExpression: { type: 'student', student: { $exists: true } } }
+);
+
+// Compound index for teacher attendance per day
+attendanceSchema.index(
+  { school: 1, type: 1, teacher: 1, date: 1 },
+  { unique: true, partialFilterExpression: { type: 'teacher', teacher: { $exists: true } } }
 );
 
 const Attendance = mongoose.model('Attendance', attendanceSchema);

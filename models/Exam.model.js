@@ -1,81 +1,46 @@
 import mongoose from 'mongoose';
 
-const createExamValidationError = (message) => {
-  const error = new Error(message);
-  error.statusCode = 400;
-  return error;
-};
-
 const examSchema = new mongoose.Schema({
   school: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'School',
     required: true
   },
-  name: {
+  session: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'AcademicSession'
+  },
+  subject: {
     type: String,
-    required: [true, 'Exam name is required'],
+    required: [true, 'Subject is required'],
     trim: true
+  },
+  class: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Class'
+  },
+  date: {
+    type: Date,
+    required: [true, 'Exam date is required']
+  },
+  startTime: String,
+  endTime: String,
+  duration: String,
+  room: String,
+  maxMarks: {
+    type: Number,
+    default: 100
+  },
+  passingMarks: {
+    type: Number,
+    default: 35
   },
   type: {
     type: String,
-    enum: ['midterm', 'final', 'unit_test', 'quarterly', 'half_yearly', 'annual'],
-    required: true
+    enum: ['midterm', 'final', 'unit_test', 'quarterly', 'half_yearly', 'annual', 'class_test'],
+    default: 'class_test'
   },
-  session: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'AcademicSession',
-    required: true
-  },
-  classes: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Class'
-  }],
-  startDate: {
-    type: Date,
-    required: true
-  },
-  endDate: {
-    type: Date,
-    required: true
-  },
-  weightage: {
-    type: Number,
-    default: 100,
-    min: 0,
-    max: 100
-  },
-  schedule: [{
-    subject: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Subject',
-      required: true
-    },
-    class: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Class'
-    },
-    sections: [String],
-    date: {
-      type: Date,
-      required: true
-    },
-    startTime: String,
-    endTime: String,
-    maxMarks: {
-      type: Number,
-      required: true
-    },
-    passingMarks: {
-      type: Number,
-      required: true
-    },
-    room: String,
-    invigilator: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Teacher'
-    }
-  }],
+  name: String,
   gradingSystem: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'GradingSystem'
@@ -106,42 +71,7 @@ const examSchema = new mongoose.Schema({
   timestamps: true
 });
 
-examSchema.index({ school: 1, session: 1, name: 1 }, { unique: true });
-
-examSchema.pre('validate', function(next) {
-  try {
-    if (this.startDate && this.endDate && this.endDate < this.startDate) {
-      throw createExamValidationError('End date must be greater than or equal to start date');
-    }
-
-    (this.schedule || []).forEach((entry, index) => {
-      if (
-        entry?.passingMarks !== undefined &&
-        entry?.maxMarks !== undefined &&
-        entry.passingMarks > entry.maxMarks
-      ) {
-        throw createExamValidationError(
-          `Schedule entry ${index + 1} has passing marks greater than max marks`
-        );
-      }
-
-      if (
-        entry?.date &&
-        this.startDate &&
-        this.endDate &&
-        (entry.date < this.startDate || entry.date > this.endDate)
-      ) {
-        throw createExamValidationError(
-          `Schedule entry ${index + 1} must fall within the exam date range`
-        );
-      }
-    });
-
-    next();
-  } catch (error) {
-    next(error);
-  }
-});
+examSchema.index({ school: 1, session: 1, subject: 1, date: 1 });
 
 const Exam = mongoose.model('Exam', examSchema);
 

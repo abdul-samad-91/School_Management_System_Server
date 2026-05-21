@@ -4,28 +4,55 @@ import { generateToken } from '../utils/generateToken.js';
 
 export const register = async (req, res) => {
   try {
-    const { username, email, password, role, permissions, profile, school } = req.body;
-    console.log(req.body);
+    const { username, name, email, password, role, permissions, profile, school } = req.body;
+
+    // Restrict role escalation: only authenticated super_admin/master_admin can assign elevated roles
+    const elevatedRoles = ['super_admin', 'master_admin'];
+    if (elevatedRoles.includes(role)) {
+      if (!req.user || !elevatedRoles.includes(req.user.role)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Only super_admin or master_admin can create accounts with elevated roles'
+        });
+      }
+    }
 
     // Check if user already exists
-    const userExists = await User.findOne({ $or: [{ email }, { username }] });
+    const userExists = await User.findOne({ $or: [{ email }] });
     if (userExists) {
       return res.status(400).json({
         success: false,
-        message: 'User with this email or username already exists'
+        message: 'User with this email already exists'
       });
+    }
+
+    // Derive username from provided username, name, or email
+    let finalUsername = username;
+    if (!finalUsername) {
+      if (name) {
+        finalUsername = name.trim().toLowerCase().replace(/\s+/g, '_');
+      } else {
+        finalUsername = email.split('@')[0].toLowerCase();
+      }
+    }
+
+    // Check if username is already taken
+    const usernameExists = await User.findOne({ username: finalUsername });
+    if (usernameExists) {
+      // Add a timestamp suffix to make it unique
+      finalUsername = `${finalUsername}_${Date.now()}`;
     }
 
     // Create user
     const user = await User.create({
-      username,
+      username: finalUsername,
       email,
       password,
       role: role || 'admin',
       school,
       permissions: permissions || [],
       profile,
-      createdBy: req.user._id
+      createdBy: req.user?._id || null  // Allow registration without authenticated user
     });
 
     res.status(201).json({
@@ -55,7 +82,6 @@ export const login = async (req, res) => {
 
     // Validate input
     if (!email || !password) {
-      console.log(email, password);
       return res.status(400).json({
         success: false,
         message: 'Please provide email and password'
@@ -67,7 +93,7 @@ export const login = async (req, res) => {
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials'
+        message: 'Invalid email or password'
       });
     }
 
@@ -84,7 +110,7 @@ export const login = async (req, res) => {
     if (!isMatch) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials'
+        message: 'Invalid email or password'
       });
     }
 
@@ -110,9 +136,10 @@ export const login = async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Login error:', error);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message || 'Login failed'
     });
   }
 };
@@ -277,4 +304,88 @@ export const logout = async (req, res) => {
     });
   }
 };
-  
+
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      // Don't reveal whether the email exists
+      return res.status(200).json({ success: true, message: 'If an account with that email exists, a reset code has been sent.' });
+    }
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    user.resetPasswordOtp = otp;
+    user.resetPasswordExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+    await user.save();
+
+    // TODO: Send OTP via email using nodemailer
+    // For now, log it in development
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[DEV] OTP for ${email}: ${otp}`);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'If an account with that email exists, a reset code has been sent.'
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const verifyOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
+      return res.status(400).json({ success: false, message: 'Email and OTP are required' });
+    }
+
+    const user = await User.findOne({
+      email,
+      resetPasswordOtp: otp,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired OTP' });
+    }
+
+    res.status(200).json({ success: true, message: 'OTP verified successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const resetPassword = async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({ success: false, message: 'Email, OTP, and new password are required' });
+    }
+
+    const user = await User.findOne({
+      email,
+      resetPasswordOtp: otp,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired OTP' });
+    }
+
+    user.password = newPassword;
+    user.resetPasswordOtp = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    res.status(200).json({ success: true, message: 'Password reset successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

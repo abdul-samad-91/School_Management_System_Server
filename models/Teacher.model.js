@@ -158,7 +158,9 @@ const teacherSchema = new mongoose.Schema({
     type: String,
     enum: ['active', 'inactive', 'resigned', 'terminated'],
     default: 'active'
-  }
+  },
+  subjectName: String,
+  classLabel: String
 }, {
   timestamps: true
 });

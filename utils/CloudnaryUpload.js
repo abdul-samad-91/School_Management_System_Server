@@ -261,4 +261,19 @@ const studentUpload = multer({
   limits: { fileSize: 15 * 1024 * 1024 }
 });
 
-export { cloudinary, upload, teacherUpload, studentUpload };
+// Add timeout middleware for student uploads
+const studentUploadWithTimeout = (req, res, next) => {
+  const timeout = setTimeout(() => {
+    res.status(408).json({
+      success: false,
+      message: 'File upload timeout. Please try again with smaller files.'
+    });
+  }, 30000); // 30 second timeout
+
+  res.on('finish', () => clearTimeout(timeout));
+  res.on('close', () => clearTimeout(timeout));
+
+  next();
+};
+
+export { cloudinary, upload, teacherUpload, studentUpload, studentUploadWithTimeout };

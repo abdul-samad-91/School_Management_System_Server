@@ -4,17 +4,21 @@ import {
   login, 
   getMe, 
   update, 
-  logout 
+  logout,
+  forgotPassword,
+  verifyOtp,
+  resetPassword
 } from '../controllers/auth.controller.js';
-import { protect, authorize } from '../middleware/auth.js';
+import { protect, optionalAuth } from '../middleware/auth.js';
 import { upload } from '../utils/CloudnaryUpload.js';
 
 const router = express.Router();
 
-router.post('/register'
-  , protect, authorize('super_admin')
-, register);
+router.post('/register', optionalAuth, register);
 router.post('/login', login);
+router.post('/forgot-password', forgotPassword);
+router.post('/verify-otp', verifyOtp);
+router.post('/reset-password', resetPassword);
 router.get('/me', protect, getMe);
 router.put('/me/update', protect, upload.single('photo'), update);
 router.post('/logout', protect, logout);

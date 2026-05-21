@@ -280,7 +280,11 @@ const normalizeAnnouncementType = (value) => {
 };
 
 const normalizeAnnouncementPriority = (value) => {
+  if (!value || value === '') return 'normal';
   const normalizedValue = normalizeTrimmedString(value, 'priority', { required: true }).toLowerCase();
+
+  // Map 'general' to 'normal' for frontend compatibility
+  if (normalizedValue === 'general') return 'normal';
 
   if (!ANNOUNCEMENT_PRIORITIES.includes(normalizedValue)) {
     throw createCommunicationError(
@@ -292,6 +296,8 @@ const normalizeAnnouncementPriority = (value) => {
 };
 
 const normalizeTargetAudience = (value) => {
+  // Default to 'all' if not provided (frontend doesn't always send this)
+  if (!value || value === '') return 'all';
   const normalizedValue = normalizeTrimmedString(value, 'targetAudience', {
     required: true
   }).toLowerCase();

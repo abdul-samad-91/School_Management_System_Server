@@ -11,6 +11,7 @@ import {
 } from '../controllers/school.controller.js';
 import { protect, checkPermission } from '../middleware/auth.js';
 import { validate } from '../middleware/validator.js';
+import { upload } from '../utils/CloudnaryUpload.js';
 
 const router = express.Router();
 
@@ -212,7 +213,10 @@ const createSchoolValidation = [
 
 const updateSchoolValidation = [
   ...schoolPayloadValidation,
-  body().custom((value) => {
+  body().custom((value, { req }) => {
+    // Allow logo-only file upload even when body has no text fields
+    if (req.file) return true;
+
     const allowedFields = [
       'name',
       'code',
@@ -248,6 +252,13 @@ const statusValidation = [
 
 
 router.get(
+  '/profile',
+  protect,
+  checkPermission('school_setup', 'view'),
+  getSchoolProfile
+);
+
+router.get(
   '/',
   protect,
   checkPermission('school_setup', 'view'),
@@ -265,14 +276,6 @@ router.get(
   getSchool
 );
 
-
-router.get(
-  '/profile',
-  protect,
-  checkPermission('school_setup', 'view'),
-  getSchoolProfile
-);
-
 router.post(
   '/profile',
   protect,
@@ -286,6 +289,7 @@ router.put(
   '/profile/:id',
   protect,
   checkPermission('school_setup', 'update'),
+  upload.single('logo'),
   [...schoolIdValidation, ...updateSchoolValidation],
   validate,
   updateSchoolProfile

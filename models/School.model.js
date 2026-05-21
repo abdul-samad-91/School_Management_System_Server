@@ -11,7 +11,7 @@ const schoolSchema = new mongoose.Schema({
   },
   branchType: {
     type: String,
-    enum: ['primary', 'model', 'high' , 'higher_secondary'],
+    enum: ['primary', 'model', 'high', 'higher_secondary', 'campus'],
     default: 'campus'
   },
   parentBranch: {

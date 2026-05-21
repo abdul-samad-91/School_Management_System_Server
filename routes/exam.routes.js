@@ -4,6 +4,7 @@ import {
   getExam,
   createExam,
   updateExam,
+  deleteExam,
   publishExam,
   startExam,
   getResults,
@@ -24,8 +25,10 @@ router.get('/results/all', protect, authorize('exam_leader', 'super_admin'), get
 router.post('/results', protect, authorize('exam_leader', 'super_admin'), createResult);
 router.put('/results/:id', protect, authorize('exam_leader', 'super_admin'), updateResult);
 router.post('/results/publish', protect, authorize('exam_leader', 'super_admin'), publishResults);
+
 router.get('/:id', protect, authorize('exam_leader', 'super_admin'), getExam);
 router.put('/:id', protect, authorize('exam_leader', 'super_admin'), updateExam);
+router.delete('/:id', protect, authorize('exam_leader', 'super_admin'), deleteExam);
 router.put('/:id/publish', protect, authorize('exam_leader', 'super_admin'), publishExam);
 router.put(
   '/:id/start',

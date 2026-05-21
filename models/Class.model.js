@@ -97,8 +97,8 @@ classSchema.pre('validate', function(next) {
   return next();
 });
 
-// Compound index to ensure unique class-session combination inside the same branch
-classSchema.index({ school: 1, name: 1, session: 1 }, { unique: true });
+// Index for querying, but no unique constraint to allow same class with different sections
+classSchema.index({ school: 1, session: 1, name: 1 });
 
 const Class = mongoose.model('Class', classSchema);
 
